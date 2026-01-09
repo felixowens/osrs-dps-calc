@@ -157,7 +157,7 @@
         "Optimizer compares 2H vs 1H+shield combinations",
         "Best overall combination is chosen"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {

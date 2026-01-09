@@ -222,3 +222,46 @@ This file tracks the progress of the gear optimizer implementation.
 - The optimization order prioritizes weapon first, shield second (for 2H comparison in future)
 
 **Next feature to work on:** opt-004 - Optimizer handles two-handed weapons correctly
+
+---
+
+## 2026-01-09 (continued)
+
+**Feature completed:** opt-004 - Optimizer handles two-handed weapons correctly
+
+**What was implemented:**
+- Added `isTwoHandedWeapon(item)` helper function to check if an equipment piece is a 2H weapon
+- Added `filterOneHandedWeapons(weapons)` to filter to only 1H weapons
+- Added `filterTwoHandedWeapons(weapons)` to filter to only 2H weapons
+- Added `findBestWeaponShieldCombination(player, monster, weapons, shields, constraints?)` function:
+  - Separates weapons into 1H and 2H categories
+  - Evaluates best 2H weapon DPS
+  - Evaluates best 1H weapon + best shield DPS combination
+  - Compares both options and returns the higher DPS choice
+  - Returns weapon, shield (null for 2H), DPS, and is2H flag
+- Modified `optimizeLoadout()` to use the new weapon/shield combination logic:
+  - Weapon and shield are now optimized together in a single step
+  - When a 2H weapon is optimal, shield slot is set to null
+  - Remaining 9 slots are optimized after weapon/shield decision
+
+- Added comprehensive tests in `src/tests/lib/Optimizer.test.ts`:
+  - Tests for `isTwoHandedWeapon` with 2H, 1H, null, and non-weapon items
+  - Tests for `filterOneHandedWeapons` and `filterTwoHandedWeapons`
+  - Tests for `findBestWeaponShieldCombination` structure, 2H selection, 1H+shield selection
+  - Tests for 2H vs 1H+shield comparison, edge cases (empty lists), blacklist support
+  - Tests for `optimizeLoadout` with 2H weapons, shield handling, blacklisting 2H weapons
+  - All 71 tests pass (21 new tests added)
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added 2H handling functions, updated optimizeLoadout)
+- `src/tests/lib/Optimizer.test.ts` (modified - added tests for opt-004)
+
+**Commit:** 4ac6a7d2
+
+**Notes for next agent:**
+- The optimizer now properly handles 2H vs 1H+shield comparison
+- `findBestWeaponShieldCombination` can be reused for other optimization scenarios
+- The `SLOT_OPTIMIZATION_ORDER` was renamed to `SLOT_OPTIMIZATION_ORDER_NON_WEAPON` since weapon/shield are handled separately
+- Ammunition handling (opt-005) is the next priority - ranged weapons need appropriate ammo selected
+
+**Next feature to work on:** opt-005 - Optimizer handles ammunition requirements
