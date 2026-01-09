@@ -129,3 +129,43 @@ This file tracks the progress of the gear optimizer implementation.
 - The `createPlayerWithEquipment` function properly recalculates all equipment bonuses after swapping
 
 **Next feature to work on:** opt-002 - Optimizer can find best item for a single slot
+
+---
+
+## 2026-01-09 (continued)
+
+**Feature completed:** opt-002 - Optimizer can find best item for a single slot
+
+**What was implemented:**
+- Added `findBestItemForSlot(slot, player, monster, candidates?, constraints?)` function to `src/lib/Optimizer.ts`:
+  - Takes a slot, player loadout, monster, optional candidate list, and optional constraints
+  - Evaluates all candidate items using `evaluateItem()`
+  - Returns a `SlotOptimizationResult` with:
+    - `bestItem`: The highest-DPS item (or null if no candidates)
+    - `score`: The DPS of the best item
+    - `candidates`: All evaluated items sorted by score descending
+  - Respects blacklist constraint - blacklisted items are excluded from evaluation
+  - Handles edge cases: empty candidates, wrong-slot items passed in
+
+- Added comprehensive tests in `src/tests/lib/Optimizer.test.ts`:
+  - Tests for return structure and required fields
+  - Tests for sorting candidates by score descending
+  - Tests for best item matching first candidate
+  - Tests for edge cases (empty array, wrong slot items)
+  - Tests for pre-filtered candidates
+  - Tests for blacklist constraints (including edge cases)
+  - All 40 tests pass (12 new tests added)
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added findBestItemForSlot function)
+- `src/tests/lib/Optimizer.test.ts` (modified - added tests for opt-002)
+
+**Commit:** fb67d9c2
+
+**Notes for next agent:**
+- `findBestItemForSlot` can be used with pre-filtered candidates from `filterBySlot` and `filterByCombatStyle`
+- Budget filtering (filter-003) and skill requirement filtering (filter-005) are prepared for but not yet implemented
+- The function ensures candidates match the slot even if unfiltered list is passed
+- For opt-003, this function can be called for each slot to build a complete loadout
+
+**Next feature to work on:** opt-003 - Optimizer can build a complete optimized loadout

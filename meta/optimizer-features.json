@@ -133,7 +133,7 @@
         "Respects all active constraints (budget, blacklist, etc.)",
         "Returns the best item and its score"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
