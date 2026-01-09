@@ -1,0 +1,550 @@
+{
+  "_meta": {
+    "description": "Feature requirements for the gear optimizer. DO NOT remove or edit feature descriptions - only change 'passes' field to true when implemented and verified.",
+    "created": "2026-01-09",
+    "warning": "It is unacceptable to remove or edit features because this could lead to missing or buggy functionality."
+  },
+  "features": [
+    {
+      "id": "data-001",
+      "category": "data",
+      "description": "Equipment items have price data available",
+      "steps": [
+        "Price data is fetched from GE API or Gearscape",
+        "Prices are stored and accessible per equipment item",
+        "Prices can be refreshed/updated"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "data-002",
+      "category": "data",
+      "description": "User can mark items as owned",
+      "steps": [
+        "User can toggle ownership status on any equipment item",
+        "Owned items are persisted to localStorage",
+        "Owned items persist across page reloads"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "data-003",
+      "category": "data",
+      "description": "User can blacklist specific items",
+      "steps": [
+        "User can add any item to a blacklist",
+        "User can remove items from the blacklist",
+        "Blacklist is persisted to localStorage",
+        "Blacklist persists across page reloads"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "data-004",
+      "category": "data",
+      "description": "Equipment skill requirements are accessible",
+      "steps": [
+        "Each equipment item has skill requirements defined",
+        "Requirements can be checked against player skills",
+        "Items can be filtered by whether player meets requirements"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "filter-001",
+      "category": "algorithm",
+      "description": "Equipment can be filtered by slot",
+      "steps": [
+        "Given an equipment slot, return only items for that slot",
+        "All 11 slots are supported (head, cape, neck, ammo, weapon, body, shield, legs, hands, feet, ring)"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "filter-002",
+      "category": "algorithm",
+      "description": "Equipment can be filtered by combat style",
+      "steps": [
+        "Given 'melee', return items with melee bonuses",
+        "Given 'ranged', return items with ranged bonuses",
+        "Given 'magic', return items with magic bonuses",
+        "Items with no offensive bonuses (e.g., pure defensive) are included for all styles"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "filter-003",
+      "category": "algorithm",
+      "description": "Equipment can be filtered by budget",
+      "steps": [
+        "Given a max price, return only items at or below that price",
+        "Owned items are considered free (price = 0)",
+        "Untradeable items are handled appropriately"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "filter-004",
+      "category": "algorithm",
+      "description": "Equipment can be filtered by blacklist",
+      "steps": [
+        "Blacklisted items are excluded from results",
+        "Filtering works in combination with other filters"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "filter-005",
+      "category": "algorithm",
+      "description": "Equipment can be filtered by skill requirements",
+      "steps": [
+        "Given player skills, return only equippable items",
+        "All relevant skills are checked (attack, strength, defence, ranged, magic, prayer)"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "opt-001",
+      "category": "algorithm",
+      "description": "Optimizer can evaluate a single equipment item's contribution to DPS",
+      "steps": [
+        "Given current loadout and a candidate item, calculate DPS delta",
+        "Uses existing PlayerVsNPCCalc for accurate calculations",
+        "Returns numeric score for comparison"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "opt-002",
+      "category": "algorithm",
+      "description": "Optimizer can find best item for a single slot",
+      "steps": [
+        "Given a slot and filtered candidates, find highest DPS item",
+        "Respects all active constraints (budget, blacklist, etc.)",
+        "Returns the best item and its score"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "opt-003",
+      "category": "algorithm",
+      "description": "Optimizer can build a complete optimized loadout",
+      "steps": [
+        "Optimizes all 11 equipment slots",
+        "Produces a complete PlayerEquipment object",
+        "Returns total DPS and per-slot breakdown"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "opt-004",
+      "category": "algorithm",
+      "description": "Optimizer handles two-handed weapons correctly",
+      "steps": [
+        "When a 2H weapon is selected, shield slot is skipped",
+        "Optimizer compares 2H vs 1H+shield combinations",
+        "Best overall combination is chosen"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "opt-005",
+      "category": "algorithm",
+      "description": "Optimizer handles ammunition requirements",
+      "steps": [
+        "Ranged weapons that require ammo get appropriate ammo selected",
+        "Ammo type matches weapon requirements (bolts for crossbows, arrows for bows)",
+        "Best ammo for the weapon is selected"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "opt-006",
+      "category": "algorithm",
+      "description": "Optimizer detects set bonus opportunities",
+      "steps": [
+        "Void Knight set is detected and evaluated",
+        "Elite Void set is detected and evaluated",
+        "Inquisitor's set is detected and evaluated",
+        "Obsidian set is detected and evaluated"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "opt-007",
+      "category": "algorithm",
+      "description": "Optimizer evaluates set bonuses vs individual BiS",
+      "steps": [
+        "Compares full set bonus DPS against greedy per-slot selection",
+        "Chooses whichever produces higher DPS",
+        "Handles partial sets appropriately"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "opt-008",
+      "category": "algorithm",
+      "description": "Optimizer respects total budget constraint",
+      "steps": [
+        "Total cost of selected items does not exceed budget",
+        "Owned items contribute 0 to cost",
+        "If budget is tight, sacrifices lower-impact slots first"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "opt-009",
+      "category": "algorithm",
+      "description": "Optimizer can optimize for different objectives",
+      "steps": [
+        "Can optimize for maximum DPS",
+        "Can optimize for maximum accuracy",
+        "Can optimize for maximum max hit",
+        "Objective selection affects slot priorities"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "weapon-001",
+      "category": "algorithm",
+      "description": "Blowpipe dart selection is handled",
+      "steps": [
+        "When blowpipe is selected, optimizer also selects best dart",
+        "Dart selection respects budget constraints",
+        "DPS calculation includes dart stats"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "weapon-002",
+      "category": "algorithm",
+      "description": "Powered staves are handled correctly",
+      "steps": [
+        "Powered staves (trident, sang, etc.) don't need separate spell selection",
+        "Built-in spell is used for DPS calculation",
+        "No ammo slot consideration for powered staves"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "weapon-003",
+      "category": "algorithm",
+      "description": "Crossbow bolt selection is handled",
+      "steps": [
+        "When crossbow is selected, optimizer selects best bolt",
+        "Bolt tier matches crossbow requirements",
+        "Special bolts (ruby, diamond, etc.) are considered"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "worker-001",
+      "category": "worker",
+      "description": "Optimizer runs in web worker",
+      "steps": [
+        "Optimization does not block the main UI thread",
+        "Uses existing worker architecture",
+        "New OPTIMIZE request type is handled"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "worker-002",
+      "category": "worker",
+      "description": "Optimizer reports progress",
+      "steps": [
+        "Progress percentage is reported during optimization",
+        "Current phase is reported (filtering, evaluating, etc.)",
+        "Current best result is available during optimization"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "worker-003",
+      "category": "worker",
+      "description": "Optimizer can be cancelled",
+      "steps": [
+        "User can cancel an in-progress optimization",
+        "Cancellation stops the worker gracefully",
+        "Partial results are available after cancellation"
+      ],
+      "passes": false,
+      "priority": "low"
+    },
+    {
+      "id": "ui-001",
+      "category": "ui",
+      "description": "Optimizer can be launched from the UI",
+      "steps": [
+        "There is a visible button/link to open the optimizer",
+        "Button is accessible from the main calculator view",
+        "Button clearly indicates its purpose"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "ui-002",
+      "category": "ui",
+      "description": "Optimizer settings modal opens",
+      "steps": [
+        "Clicking the optimizer button opens a modal",
+        "Modal can be closed",
+        "Modal follows existing design patterns"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "ui-003",
+      "category": "ui",
+      "description": "User can set a budget constraint",
+      "steps": [
+        "Budget input accepts numeric values",
+        "Budget can be set to 'unlimited'",
+        "Budget displays in appropriate format (k, m, b suffixes)"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "ui-004",
+      "category": "ui",
+      "description": "User can select combat style to optimize",
+      "steps": [
+        "Dropdown or toggle for melee/ranged/magic",
+        "Selection affects which items are considered",
+        "Default matches current loadout style"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "ui-005",
+      "category": "ui",
+      "description": "User can select optimization objective",
+      "steps": [
+        "Options for DPS, accuracy, max hit",
+        "Default is DPS",
+        "Selection affects optimization algorithm"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "ui-006",
+      "category": "ui",
+      "description": "User can manage owned items",
+      "steps": [
+        "Interface to search and add owned items",
+        "Interface to remove items from owned list",
+        "Owned items are displayed clearly"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "ui-007",
+      "category": "ui",
+      "description": "User can manage blacklisted items",
+      "steps": [
+        "Interface to search and add items to blacklist",
+        "Interface to remove items from blacklist",
+        "Blacklisted items are displayed clearly"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "ui-008",
+      "category": "ui",
+      "description": "User can toggle skill requirement enforcement",
+      "steps": [
+        "Checkbox to enable/disable skill requirement filtering",
+        "When enabled, only equippable items are considered",
+        "Uses current player skills from loadout"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "ui-009",
+      "category": "ui",
+      "description": "Optimizer shows progress while running",
+      "steps": [
+        "Progress bar or spinner is visible during optimization",
+        "Current phase is displayed",
+        "User knows optimization is in progress"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "ui-010",
+      "category": "ui",
+      "description": "Optimizer results are displayed",
+      "steps": [
+        "Optimized loadout is shown visually",
+        "DPS and other metrics are displayed",
+        "Total cost is displayed"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "ui-011",
+      "category": "ui",
+      "description": "Results show comparison to current loadout",
+      "steps": [
+        "DPS difference is shown (e.g., +15%)",
+        "Cost difference is shown",
+        "Per-slot changes are highlighted"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "ui-012",
+      "category": "ui",
+      "description": "User can apply optimized loadout",
+      "steps": [
+        "Button to apply result to current loadout",
+        "Confirmation before overwriting",
+        "Loadout is updated with optimized equipment"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "ui-013",
+      "category": "ui",
+      "description": "User can apply result to a different loadout slot",
+      "steps": [
+        "Option to choose which loadout slot (1-6) to apply to",
+        "Can create new loadout with optimized gear",
+        "Does not overwrite current loadout if different slot selected"
+      ],
+      "passes": false,
+      "priority": "low"
+    },
+    {
+      "id": "int-001",
+      "category": "integration",
+      "description": "Optimizer uses current monster selection",
+      "steps": [
+        "Target monster from main UI is used",
+        "Monster defensive stats affect optimization",
+        "Monster attributes (undead, demon, etc.) are considered"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "int-002",
+      "category": "integration",
+      "description": "Optimizer uses current player stats",
+      "steps": [
+        "Player skills from current loadout are used",
+        "Prayer selection is considered",
+        "Potion boosts are considered"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "int-003",
+      "category": "integration",
+      "description": "Optimizer respects slayer task setting",
+      "steps": [
+        "If on slayer task, slayer helm bonus is factored in",
+        "Slayer helm is prioritized when on task",
+        "Black mask variants are considered"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "int-004",
+      "category": "integration",
+      "description": "Optimizer state integrates with main app state",
+      "steps": [
+        "Optimizer settings are stored in global state",
+        "Settings persist across modal open/close",
+        "Results can update main loadout state"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
+      "id": "edge-001",
+      "category": "edge-case",
+      "description": "Empty budget returns best free/owned gear",
+      "steps": [
+        "When budget is 0, only owned items are used",
+        "If no owned items, returns empty or minimal loadout",
+        "Does not error or crash"
+      ],
+      "passes": false,
+      "priority": "medium"
+    },
+    {
+      "id": "edge-002",
+      "category": "edge-case",
+      "description": "All items blacklisted is handled",
+      "steps": [
+        "When all items in a slot are blacklisted, slot is left empty",
+        "Optimization continues for other slots",
+        "User is warned about empty slots"
+      ],
+      "passes": false,
+      "priority": "low"
+    },
+    {
+      "id": "edge-003",
+      "category": "edge-case",
+      "description": "Level 1 stats are handled",
+      "steps": [
+        "Optimizer works with level 1 in all skills",
+        "Only items with no requirements are selected",
+        "Results are valid for the stat levels"
+      ],
+      "passes": false,
+      "priority": "low"
+    },
+    {
+      "id": "edge-004",
+      "category": "edge-case",
+      "description": "Custom monsters are supported",
+      "steps": [
+        "Optimizer works with custom monster inputs",
+        "Defense bonuses are properly used",
+        "No crashes on unusual stat combinations"
+      ],
+      "passes": false,
+      "priority": "low"
+    }
+  ]
+}
