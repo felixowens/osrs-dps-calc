@@ -1,6 +1,46 @@
 import { EquipmentPiece } from '@/types/Player';
-import { EquipmentSlot, EQUIPMENT_SLOTS } from '@/types/Optimizer';
+import { CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS } from '@/types/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
+
+/**
+ * Check if an equipment piece has any melee offensive bonuses.
+ * Melee includes stab, slash, crush offensive stats and strength bonus.
+ */
+function hasMeleeBonuses(item: EquipmentPiece): boolean {
+  const { offensive, bonuses } = item;
+  return (
+    offensive.stab > 0
+    || offensive.slash > 0
+    || offensive.crush > 0
+    || bonuses.str > 0
+  );
+}
+
+/**
+ * Check if an equipment piece has any ranged offensive bonuses.
+ * Ranged includes ranged offensive stat and ranged strength bonus.
+ */
+function hasRangedBonuses(item: EquipmentPiece): boolean {
+  const { offensive, bonuses } = item;
+  return offensive.ranged > 0 || bonuses.ranged_str > 0;
+}
+
+/**
+ * Check if an equipment piece has any magic offensive bonuses.
+ * Magic includes magic offensive stat and magic strength (damage) bonus.
+ */
+function hasMagicBonuses(item: EquipmentPiece): boolean {
+  const { offensive, bonuses } = item;
+  return offensive.magic > 0 || bonuses.magic_str > 0;
+}
+
+/**
+ * Check if an equipment piece has any offensive bonuses for any combat style.
+ * Used to identify "neutral" items that should be included for all styles.
+ */
+function hasAnyOffensiveBonuses(item: EquipmentPiece): boolean {
+  return hasMeleeBonuses(item) || hasRangedBonuses(item) || hasMagicBonuses(item);
+}
 
 /**
  * Filter equipment by slot.
@@ -21,6 +61,45 @@ export function filterBySlot(
   }
 
   return equipment.filter((item) => item.slot === slot);
+}
+
+/**
+ * Filter equipment by combat style.
+ *
+ * Returns items that are relevant for the specified combat style:
+ * - 'melee': Items with stab/slash/crush attack or strength bonuses
+ * - 'ranged': Items with ranged attack or ranged strength bonuses
+ * - 'magic': Items with magic attack or magic damage bonuses
+ *
+ * Items with no offensive bonuses (pure defensive items) are included for all styles,
+ * as they may still be useful (e.g., barrows armor for tanking).
+ *
+ * @param style - The combat style to filter for
+ * @param equipment - Optional array of equipment to filter. Defaults to all available equipment.
+ * @returns Array of equipment pieces relevant to the specified combat style
+ */
+export function filterByCombatStyle(
+  style: CombatStyle,
+  equipment: EquipmentPiece[] = availableEquipment,
+): EquipmentPiece[] {
+  return equipment.filter((item) => {
+    // Items with no offensive bonuses are included for all styles (pure defensive gear)
+    if (!hasAnyOffensiveBonuses(item)) {
+      return true;
+    }
+
+    // Filter by the specific combat style
+    switch (style) {
+      case 'melee':
+        return hasMeleeBonuses(item);
+      case 'ranged':
+        return hasRangedBonuses(item);
+      case 'magic':
+        return hasMagicBonuses(item);
+      default:
+        return false;
+    }
+  });
 }
 
 /**
