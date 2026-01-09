@@ -366,12 +366,10 @@ export function findBestItemForSlot(
 }
 
 /**
- * Slot optimization order. Weapon is first because it has the biggest impact on DPS.
- * Two-handed weapons affect shield slot, so shield comes after weapon.
+ * Slot optimization order. Weapon and shield are handled specially for 2H vs 1H+shield comparison.
+ * Other slots are ordered by typical impact on DPS.
  */
-const SLOT_OPTIMIZATION_ORDER: EquipmentSlot[] = [
-  'weapon',
-  'shield',
+const SLOT_OPTIMIZATION_ORDER_NON_WEAPON: EquipmentSlot[] = [
   'head',
   'body',
   'legs',
@@ -382,6 +380,125 @@ const SLOT_OPTIMIZATION_ORDER: EquipmentSlot[] = [
   'ammo',
   'ring',
 ];
+
+/**
+ * Check if an equipment piece is a two-handed weapon.
+ *
+ * @param item - The equipment piece to check
+ * @returns True if the item is a two-handed weapon
+ */
+export function isTwoHandedWeapon(item: EquipmentPiece | null | undefined): boolean {
+  return item?.isTwoHanded ?? false;
+}
+
+/**
+ * Filter weapons to only one-handed weapons.
+ *
+ * @param weapons - Array of weapon equipment pieces
+ * @returns Array containing only one-handed weapons
+ */
+export function filterOneHandedWeapons(weapons: EquipmentPiece[]): EquipmentPiece[] {
+  return weapons.filter((w) => !w.isTwoHanded);
+}
+
+/**
+ * Filter weapons to only two-handed weapons.
+ *
+ * @param weapons - Array of weapon equipment pieces
+ * @returns Array containing only two-handed weapons
+ */
+export function filterTwoHandedWeapons(weapons: EquipmentPiece[]): EquipmentPiece[] {
+  return weapons.filter((w) => w.isTwoHanded);
+}
+
+/**
+ * Find the best weapon+shield combination.
+ *
+ * This function handles the comparison between:
+ * 1. Best two-handed weapon (no shield)
+ * 2. Best one-handed weapon + best shield
+ *
+ * It returns the combination that produces the highest DPS.
+ *
+ * @param player - The base player loadout
+ * @param monster - The monster to optimize against
+ * @param weaponCandidates - Candidate weapons (filtered by style, etc.)
+ * @param shieldCandidates - Candidate shields
+ * @param constraints - Optional constraints to apply
+ * @returns Object containing the best weapon, shield (or null for 2H), and combined DPS
+ */
+export function findBestWeaponShieldCombination(
+  player: Player,
+  monster: Monster,
+  weaponCandidates: EquipmentPiece[],
+  shieldCandidates: EquipmentPiece[],
+  constraints?: OptimizerConstraints,
+): { weapon: EquipmentPiece | null; shield: EquipmentPiece | null; dps: number; is2H: boolean } {
+  // Separate weapons into 1H and 2H
+  const oneHandedWeapons = filterOneHandedWeapons(weaponCandidates);
+  const twoHandedWeapons = filterTwoHandedWeapons(weaponCandidates);
+
+  let best2HDps = 0;
+  let best2HWeapon: EquipmentPiece | null = null;
+
+  let best1HComboDps = 0;
+  let best1HWeapon: EquipmentPiece | null = null;
+  let bestShield: EquipmentPiece | null = null;
+
+  // Evaluate best 2H weapon
+  if (twoHandedWeapons.length > 0) {
+    const result2H = findBestItemForSlot('weapon', player, monster, twoHandedWeapons, constraints);
+    if (result2H.bestItem) {
+      best2HWeapon = result2H.bestItem;
+      best2HDps = result2H.score;
+    }
+  }
+
+  // Evaluate best 1H + shield combination
+  if (oneHandedWeapons.length > 0) {
+    // Find best 1H weapon first
+    const result1H = findBestItemForSlot('weapon', player, monster, oneHandedWeapons, constraints);
+    if (result1H.bestItem) {
+      best1HWeapon = result1H.bestItem;
+
+      // Create player with best 1H weapon to evaluate shields
+      const playerWith1H = createPlayerWithEquipment(player, 'weapon', best1HWeapon, monster);
+
+      // Find best shield with the 1H weapon equipped
+      if (shieldCandidates.length > 0) {
+        const resultShield = findBestItemForSlot('shield', playerWith1H, monster, shieldCandidates, constraints);
+        if (resultShield.bestItem) {
+          bestShield = resultShield.bestItem;
+          // The shield result's score is the DPS with both 1H and shield equipped
+          best1HComboDps = resultShield.score;
+        } else {
+          // No valid shield, use 1H weapon DPS alone
+          best1HComboDps = result1H.score;
+        }
+      } else {
+        // No shield candidates, use 1H weapon DPS alone
+        best1HComboDps = result1H.score;
+      }
+    }
+  }
+
+  // Compare 2H vs 1H+shield and return the better option
+  if (best2HDps >= best1HComboDps && best2HWeapon) {
+    return {
+      weapon: best2HWeapon,
+      shield: null, // 2H weapons cannot use shield
+      dps: best2HDps,
+      is2H: true,
+    };
+  }
+
+  return {
+    weapon: best1HWeapon,
+    shield: bestShield,
+    dps: best1HComboDps,
+    is2H: false,
+  };
+}
 
 /**
  * Create a new player with a complete equipment set.
@@ -428,10 +545,16 @@ export interface OptimizeLoadoutOptions {
  *
  * This function uses a greedy per-slot algorithm:
  * 1. Pre-filters equipment by combat style (if specified)
- * 2. For each slot (starting with weapon for maximum impact):
+ * 2. Optimizes weapon+shield together to handle 2H vs 1H+shield comparison
+ * 3. For remaining slots:
  *    - Finds the best item using `findBestItemForSlot`
  *    - Updates the player's equipment with the best item
- * 3. Returns the complete optimized loadout with metrics
+ * 4. Returns the complete optimized loadout with metrics
+ *
+ * Two-handed weapon handling (opt-004):
+ * - Compares best 2H weapon vs best 1H weapon + best shield
+ * - Chooses whichever combination produces higher DPS
+ * - When 2H is selected, shield slot is set to null
  *
  * The greedy approach may miss synergies (e.g., set bonuses), but provides
  * a fast baseline optimization. Set bonus handling will be added in opt-006/opt-007.
@@ -474,9 +597,6 @@ export function optimizeLoadout(
   // Start with a copy of the player to track progressive equipment changes
   let currentPlayer = { ...player };
 
-  // Track per-slot results for the breakdown
-  const slotResults: Partial<Record<EquipmentSlot, SlotOptimizationResult>> = {};
-
   // Build the optimized equipment progressively
   const optimizedEquipment: PlayerEquipment = {
     head: null,
@@ -492,13 +612,41 @@ export function optimizeLoadout(
     ring: null,
   };
 
-  // Optimize each slot in order
-  for (const slot of SLOT_OPTIMIZATION_ORDER) {
+  // Step 1: Optimize weapon+shield together (handles 2H vs 1H+shield comparison)
+  const weaponCandidates = candidatesBySlot.weapon;
+  const shieldCandidates = candidatesBySlot.shield;
+
+  const weaponShieldResult = findBestWeaponShieldCombination(
+    currentPlayer,
+    monster,
+    weaponCandidates,
+    shieldCandidates,
+    constraints,
+  );
+
+  // Track evaluations for weapon and shield
+  totalEvaluations += weaponCandidates.length + (weaponShieldResult.is2H ? 0 : shieldCandidates.length);
+
+  // Apply weapon+shield result
+  optimizedEquipment.weapon = weaponShieldResult.weapon;
+  optimizedEquipment.shield = weaponShieldResult.shield; // null for 2H weapons
+
+  // Update current player with weapon
+  if (weaponShieldResult.weapon) {
+    currentPlayer = createPlayerWithEquipment(currentPlayer, 'weapon', weaponShieldResult.weapon, monster);
+  }
+
+  // Update current player with shield (if not using 2H)
+  if (weaponShieldResult.shield) {
+    currentPlayer = createPlayerWithEquipment(currentPlayer, 'shield', weaponShieldResult.shield, monster);
+  }
+
+  // Step 2: Optimize remaining slots (excluding weapon and shield)
+  for (const slot of SLOT_OPTIMIZATION_ORDER_NON_WEAPON) {
     const candidates = candidatesBySlot[slot];
 
     // Find the best item for this slot
     const result = findBestItemForSlot(slot, currentPlayer, monster, candidates, constraints);
-    slotResults[slot] = result;
     totalEvaluations += result.candidates.length;
 
     // Update the optimized equipment

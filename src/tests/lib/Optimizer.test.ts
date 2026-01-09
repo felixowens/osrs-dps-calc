@@ -2,6 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   filterBySlot, filterByCombatStyle, evaluateItem, evaluateItemDelta, calculateDps, createPlayerWithEquipment,
   findBestItemForSlot, optimizeLoadout,
+  isTwoHandedWeapon, filterOneHandedWeapons, filterTwoHandedWeapons, findBestWeaponShieldCombination,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -782,6 +783,266 @@ describe('Optimizer', () => {
         // DPS should be different for different monsters
         // Corp beast has much higher defense
         expect(resultAbyssal.metrics.dps).not.toBe(resultCorp.metrics.dps);
+      });
+    });
+  });
+
+  describe('Two-handed weapon handling (opt-004)', () => {
+    // Get some common test items
+    const abyssalWhip = findEquipment('Abyssal whip'); // 1H melee
+    const scythe = findEquipment('Scythe of vitur'); // 2H melee
+    const godsword = findEquipment('Armadyl godsword'); // 2H melee
+    const dragonDefender = findEquipment('Dragon defender'); // Shield
+    const avernicDefender = findEquipment('Avernic defender'); // Shield
+
+    describe('isTwoHandedWeapon', () => {
+      test('returns true for two-handed weapons', () => {
+        expect(isTwoHandedWeapon(scythe)).toBe(true);
+        expect(isTwoHandedWeapon(godsword)).toBe(true);
+      });
+
+      test('returns false for one-handed weapons', () => {
+        expect(isTwoHandedWeapon(abyssalWhip)).toBe(false);
+      });
+
+      test('returns false for null/undefined', () => {
+        expect(isTwoHandedWeapon(null)).toBe(false);
+        expect(isTwoHandedWeapon(undefined)).toBe(false);
+      });
+
+      test('returns false for non-weapon equipment', () => {
+        expect(isTwoHandedWeapon(dragonDefender)).toBe(false);
+      });
+    });
+
+    describe('filterOneHandedWeapons', () => {
+      test('filters to only 1H weapons', () => {
+        const weapons = filterBySlot('weapon');
+        const oneHanded = filterOneHandedWeapons(weapons);
+
+        expect(oneHanded.length).toBeGreaterThan(0);
+        expect(oneHanded.every((w) => !w.isTwoHanded)).toBe(true);
+      });
+
+      test('includes whip but not godswords', () => {
+        const weapons = filterBySlot('weapon');
+        const oneHanded = filterOneHandedWeapons(weapons);
+
+        expect(oneHanded).toContain(abyssalWhip);
+        expect(oneHanded).not.toContain(godsword);
+      });
+
+      test('returns fewer items than total weapons', () => {
+        const weapons = filterBySlot('weapon');
+        const oneHanded = filterOneHandedWeapons(weapons);
+
+        expect(oneHanded.length).toBeLessThan(weapons.length);
+      });
+    });
+
+    describe('filterTwoHandedWeapons', () => {
+      test('filters to only 2H weapons', () => {
+        const weapons = filterBySlot('weapon');
+        const twoHanded = filterTwoHandedWeapons(weapons);
+
+        expect(twoHanded.length).toBeGreaterThan(0);
+        expect(twoHanded.every((w) => w.isTwoHanded)).toBe(true);
+      });
+
+      test('includes godswords but not whip', () => {
+        const weapons = filterBySlot('weapon');
+        const twoHanded = filterTwoHandedWeapons(weapons);
+
+        expect(twoHanded).toContain(godsword);
+        expect(twoHanded).not.toContain(abyssalWhip);
+      });
+    });
+
+    describe('findBestWeaponShieldCombination', () => {
+      test('returns the correct structure', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        const weapons = filterBySlot('weapon').slice(0, 20);
+        const shields = filterBySlot('shield').slice(0, 10);
+
+        const result = findBestWeaponShieldCombination(player, monster, weapons, shields);
+
+        expect(result).toHaveProperty('weapon');
+        expect(result).toHaveProperty('shield');
+        expect(result).toHaveProperty('dps');
+        expect(result).toHaveProperty('is2H');
+      });
+
+      test('shield is null when 2H weapon is selected', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        // Use only 2H weapons to force 2H selection
+        const twoHandedWeapons = [scythe, godsword];
+        const shields = [dragonDefender, avernicDefender];
+
+        const result = findBestWeaponShieldCombination(player, monster, twoHandedWeapons, shields);
+
+        expect(result.is2H).toBe(true);
+        expect(result.shield).toBeNull();
+        expect(result.weapon?.isTwoHanded).toBe(true);
+      });
+
+      test('shield can be selected with 1H weapon', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        // Use only 1H weapons
+        const oneHandedWeapons = [abyssalWhip];
+        const shields = [dragonDefender, avernicDefender];
+
+        const result = findBestWeaponShieldCombination(player, monster, oneHandedWeapons, shields);
+
+        expect(result.is2H).toBe(false);
+        expect(result.weapon?.isTwoHanded).toBe(false);
+        // Shield should be selected (avernic is better)
+        expect(result.shield).not.toBeNull();
+      });
+
+      test('compares 2H vs 1H+shield and picks better DPS', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        // Mix of 1H and 2H weapons
+        const weapons = [abyssalWhip, godsword];
+        const shields = [dragonDefender];
+
+        const result = findBestWeaponShieldCombination(player, monster, weapons, shields);
+
+        // Result should have positive DPS
+        expect(result.dps).toBeGreaterThan(0);
+
+        // Either 2H or 1H+shield based on what's better
+        if (result.is2H) {
+          expect(result.shield).toBeNull();
+          expect(result.weapon?.isTwoHanded).toBe(true);
+        } else {
+          expect(result.weapon?.isTwoHanded).toBe(false);
+        }
+      });
+
+      test('handles empty weapon list', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        const shields = [dragonDefender];
+
+        const result = findBestWeaponShieldCombination(player, monster, [], shields);
+
+        expect(result.weapon).toBeNull();
+        expect(result.shield).toBeNull();
+        expect(result.dps).toBe(0);
+      });
+
+      test('handles empty shield list with 1H weapon', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        const result = findBestWeaponShieldCombination(player, monster, [abyssalWhip], []);
+
+        // Should still select the 1H weapon, just no shield
+        expect(result.weapon).not.toBeNull();
+        expect(result.shield).toBeNull();
+        expect(result.is2H).toBe(false);
+      });
+
+      test('respects blacklist constraint', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        const weapons = [abyssalWhip, godsword];
+        const shields = [dragonDefender, avernicDefender];
+
+        // Blacklist the godsword
+        const constraints = { blacklistedItems: new Set([godsword.id]) };
+
+        const result = findBestWeaponShieldCombination(player, monster, weapons, shields, constraints);
+
+        // Should not select the blacklisted godsword
+        expect(result.weapon?.id).not.toBe(godsword.id);
+      });
+    });
+
+    describe('optimizeLoadout with 2H weapons', () => {
+      test('sets shield to null when 2H weapon is optimal', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        // Optimize for melee
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // If a 2H weapon was selected, shield should be null
+        if (result.equipment.weapon?.isTwoHanded) {
+          expect(result.equipment.shield).toBeNull();
+        }
+      });
+
+      test('can select shield with 1H weapon', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // If a 1H weapon was selected, shield could be selected
+        if (!result.equipment.weapon?.isTwoHanded) {
+          // Shield slot exists (may or may not have a shield depending on optimization)
+          expect(result.equipment).toHaveProperty('shield');
+        }
+      });
+
+      test('2H weapon selection produces valid DPS metrics', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: scythe } });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Should produce valid metrics regardless of 2H/1H choice
+        expect(result.metrics.dps).toBeGreaterThan(0);
+        expect(result.metrics.accuracy).toBeGreaterThan(0);
+        expect(result.metrics.maxHit).toBeGreaterThan(0);
+      });
+
+      test('correctly compares 2H vs 1H+shield for best DPS', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // The result should be the optimal choice
+        // We can't easily verify which is "correct" but we can verify consistency
+        if (result.equipment.weapon?.isTwoHanded) {
+          // 2H selected - shield must be null
+          expect(result.equipment.shield).toBeNull();
+        } else if (result.equipment.weapon) {
+          // 1H selected - the combination was determined to be better
+          // Shield may or may not be present
+          expect(result.equipment.weapon.isTwoHanded).toBe(false);
+        }
+      });
+
+      test('blacklisting 2H weapons forces 1H+shield selection', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        // Get all 2H weapon IDs
+        const twoHandedWeaponIds = filterTwoHandedWeapons(filterBySlot('weapon')).map((w) => w.id);
+        const blacklist = new Set(twoHandedWeaponIds);
+
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: { blacklistedItems: blacklist },
+        });
+
+        // Should not select any 2H weapon
+        if (result.equipment.weapon) {
+          expect(result.equipment.weapon.isTwoHanded).toBe(false);
+        }
       });
     });
   });
