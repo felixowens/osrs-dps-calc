@@ -2,7 +2,7 @@ import { EquipmentPiece, Player, PlayerEquipment } from '@/types/Player';
 import { Monster } from '@/types/Monster';
 import {
   CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation,
-  OptimizerConstraints, SlotOptimizationResult,
+  OptimizerConstraints, OptimizerResult, SlotOptimizationResult,
 } from '@/types/Optimizer';
 import { availableEquipment, calculateEquipmentBonusesFromGear } from '@/lib/Equipment';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
@@ -362,5 +362,178 @@ export function findBestItemForSlot(
     bestItem: best.item,
     score: best.score,
     candidates: evaluations,
+  };
+}
+
+/**
+ * Slot optimization order. Weapon is first because it has the biggest impact on DPS.
+ * Two-handed weapons affect shield slot, so shield comes after weapon.
+ */
+const SLOT_OPTIMIZATION_ORDER: EquipmentSlot[] = [
+  'weapon',
+  'shield',
+  'head',
+  'body',
+  'legs',
+  'hands',
+  'feet',
+  'cape',
+  'neck',
+  'ammo',
+  'ring',
+];
+
+/**
+ * Create a new player with a complete equipment set.
+ *
+ * This is similar to createPlayerWithEquipment but sets all slots at once.
+ *
+ * @param basePlayer - The base player to copy non-equipment properties from
+ * @param equipment - The complete equipment set
+ * @param monster - The monster (needed for bonus calculations)
+ * @returns A new player with the specified equipment and recalculated bonuses
+ */
+function createPlayerFromEquipment(
+  basePlayer: Player,
+  equipment: PlayerEquipment,
+  monster: Monster,
+): Player {
+  const newPlayer: Player = {
+    ...basePlayer,
+    equipment,
+  };
+
+  // Recalculate bonuses based on the new equipment
+  const bonuses = calculateEquipmentBonusesFromGear(newPlayer, monster);
+  newPlayer.bonuses = bonuses.bonuses;
+  newPlayer.offensive = bonuses.offensive;
+  newPlayer.defensive = bonuses.defensive;
+  newPlayer.attackSpeed = bonuses.attackSpeed;
+
+  return newPlayer;
+}
+
+/**
+ * Input options for the loadout optimizer.
+ */
+export interface OptimizeLoadoutOptions {
+  /** Combat style to optimize for. If not provided, includes all styles. */
+  combatStyle?: CombatStyle;
+  /** Constraints to apply during optimization */
+  constraints?: OptimizerConstraints;
+}
+
+/**
+ * Build a complete optimized loadout by optimizing all 11 equipment slots.
+ *
+ * This function uses a greedy per-slot algorithm:
+ * 1. Pre-filters equipment by combat style (if specified)
+ * 2. For each slot (starting with weapon for maximum impact):
+ *    - Finds the best item using `findBestItemForSlot`
+ *    - Updates the player's equipment with the best item
+ * 3. Returns the complete optimized loadout with metrics
+ *
+ * The greedy approach may miss synergies (e.g., set bonuses), but provides
+ * a fast baseline optimization. Set bonus handling will be added in opt-006/opt-007.
+ *
+ * @param player - The base player loadout (provides context like skills, prayers, style)
+ * @param monster - The monster to optimize against
+ * @param options - Optional optimization options (combat style, constraints)
+ * @returns An OptimizerResult with the optimized equipment and metrics
+ *
+ * @example
+ * ```typescript
+ * const player = getTestPlayer(monster, { equipment: { weapon: whip } });
+ * const monster = getTestMonster('Abyssal demon');
+ *
+ * // Optimize for melee combat
+ * const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+ * console.log(`Optimized DPS: ${result.metrics.dps}`);
+ * console.log(`Best weapon: ${result.equipment.weapon?.name}`);
+ * ```
+ */
+export function optimizeLoadout(
+  player: Player,
+  monster: Monster,
+  options: OptimizeLoadoutOptions = {},
+): OptimizerResult {
+  const startTime = performance.now();
+  let totalEvaluations = 0;
+
+  const { combatStyle, constraints } = options;
+
+  // Pre-filter equipment by combat style if specified
+  let candidatePool = availableEquipment;
+  if (combatStyle) {
+    candidatePool = filterByCombatStyle(combatStyle, candidatePool);
+  }
+
+  // Group candidates by slot for faster lookup
+  const candidatesBySlot = groupBySlot(candidatePool);
+
+  // Start with a copy of the player to track progressive equipment changes
+  let currentPlayer = { ...player };
+
+  // Track per-slot results for the breakdown
+  const slotResults: Partial<Record<EquipmentSlot, SlotOptimizationResult>> = {};
+
+  // Build the optimized equipment progressively
+  const optimizedEquipment: PlayerEquipment = {
+    head: null,
+    cape: null,
+    neck: null,
+    ammo: null,
+    weapon: null,
+    body: null,
+    shield: null,
+    legs: null,
+    hands: null,
+    feet: null,
+    ring: null,
+  };
+
+  // Optimize each slot in order
+  for (const slot of SLOT_OPTIMIZATION_ORDER) {
+    const candidates = candidatesBySlot[slot];
+
+    // Find the best item for this slot
+    const result = findBestItemForSlot(slot, currentPlayer, monster, candidates, constraints);
+    slotResults[slot] = result;
+    totalEvaluations += result.candidates.length;
+
+    // Update the optimized equipment
+    optimizedEquipment[slot] = result.bestItem;
+
+    // Update the current player with the new equipment for the next iteration
+    // This ensures subsequent slot evaluations account for the already-selected items
+    if (result.bestItem) {
+      currentPlayer = createPlayerWithEquipment(currentPlayer, slot, result.bestItem, monster);
+    }
+  }
+
+  // Calculate final metrics with the complete loadout
+  const finalPlayer = createPlayerFromEquipment(player, optimizedEquipment, monster);
+  const calc = new PlayerVsNPCCalc(finalPlayer, monster);
+  const dps = calc.getDps();
+  const accuracy = calc.getHitChance();
+  const maxHit = calc.getMax();
+
+  const endTime = performance.now();
+
+  return {
+    equipment: optimizedEquipment,
+    metrics: {
+      dps,
+      accuracy,
+      maxHit,
+    },
+    cost: {
+      total: 0, // Price data not yet implemented (data-001)
+      perSlot: {}, // Price data not yet implemented (data-001)
+    },
+    meta: {
+      evaluations: totalEvaluations,
+      timeMs: endTime - startTime,
+    },
   };
 }

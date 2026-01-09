@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import {
   filterBySlot, filterByCombatStyle, evaluateItem, evaluateItemDelta, calculateDps, createPlayerWithEquipment,
-  findBestItemForSlot,
+  findBestItemForSlot, optimizeLoadout,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -588,6 +588,200 @@ describe('Optimizer', () => {
 
         // All candidates should be evaluated
         expect(result.candidates.length).toBe(50);
+      });
+    });
+  });
+
+  describe('optimizeLoadout (opt-003)', () => {
+    const abyssalWhip = findEquipment('Abyssal whip');
+    const rapier = findEquipment('Ghrazi rapier');
+
+    test('returns an OptimizerResult with all required fields', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const result = optimizeLoadout(player, monster);
+
+      // Check required fields exist
+      expect(result).toHaveProperty('equipment');
+      expect(result).toHaveProperty('metrics');
+      expect(result).toHaveProperty('cost');
+      expect(result).toHaveProperty('meta');
+
+      // Check metrics structure
+      expect(result.metrics).toHaveProperty('dps');
+      expect(result.metrics).toHaveProperty('accuracy');
+      expect(result.metrics).toHaveProperty('maxHit');
+      expect(typeof result.metrics.dps).toBe('number');
+      expect(typeof result.metrics.accuracy).toBe('number');
+      expect(typeof result.metrics.maxHit).toBe('number');
+
+      // Check cost structure
+      expect(result.cost).toHaveProperty('total');
+      expect(result.cost).toHaveProperty('perSlot');
+
+      // Check meta structure
+      expect(result.meta).toHaveProperty('evaluations');
+      expect(result.meta).toHaveProperty('timeMs');
+      expect(result.meta.evaluations).toBeGreaterThan(0);
+      expect(result.meta.timeMs).toBeGreaterThanOrEqual(0);
+    });
+
+    test('returns a complete PlayerEquipment object', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const result = optimizeLoadout(player, monster);
+
+      // Should have all 11 slots defined (even if some are null)
+      const slots = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'feet', 'ring'] as const;
+      for (const slot of slots) {
+        expect(result.equipment).toHaveProperty(slot);
+      }
+    });
+
+    test('produces positive DPS metrics', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const result = optimizeLoadout(player, monster);
+
+      expect(result.metrics.dps).toBeGreaterThan(0);
+      expect(result.metrics.accuracy).toBeGreaterThan(0);
+      expect(result.metrics.accuracy).toBeLessThanOrEqual(1);
+      expect(result.metrics.maxHit).toBeGreaterThan(0);
+    });
+
+    test('optimizes all 11 slots', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+      // Check that equipment has been selected for major slots
+      // Weapon should definitely be filled
+      expect(result.equipment.weapon).not.toBeNull();
+      expect(result.equipment.weapon?.slot).toBe('weapon');
+
+      // Count how many slots have items
+      const filledSlots = Object.values(result.equipment).filter((item) => item !== null).length;
+      expect(filledSlots).toBeGreaterThan(5); // At least half the slots should be filled
+    });
+
+    describe('with combatStyle option', () => {
+      test('filters equipment by combat style', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const meleeResult = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // The selected weapon should be a melee weapon
+        expect(meleeResult.equipment.weapon).not.toBeNull();
+        const weapon = meleeResult.equipment.weapon!;
+
+        // Check it has melee bonuses (stab, slash, crush attack OR str bonus)
+        const hasMeleeBonuses = weapon.offensive.stab > 0
+          || weapon.offensive.slash > 0
+          || weapon.offensive.crush > 0
+          || weapon.bonuses.str > 0;
+        expect(hasMeleeBonuses).toBe(true);
+      });
+    });
+
+    describe('with constraints', () => {
+      test('respects blacklist constraint', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const rapierId = rapier.id;
+
+        // Optimize without blacklist
+        const resultWithout = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Optimize with rapier blacklisted
+        const resultWith = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: { blacklistedItems: new Set([rapierId]) },
+        });
+
+        // If rapier was selected without blacklist, it should not be selected with blacklist
+        if (resultWithout.equipment.weapon?.id === rapierId) {
+          expect(resultWith.equipment.weapon?.id).not.toBe(rapierId);
+        }
+      });
+    });
+
+    describe('metrics calculation', () => {
+      test('DPS is recalculated with full optimized loadout', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // The final DPS should be different from initial player DPS
+        // since the loadout has been optimized
+        const initialDps = calculateDps(player, monster);
+
+        // Optimized DPS should be >= initial (we're optimizing for better performance)
+        expect(result.metrics.dps).toBeGreaterThanOrEqual(initialDps);
+      });
+    });
+
+    describe('meta information', () => {
+      test('tracks total number of evaluations', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Should have evaluated items for all 11 slots
+        expect(result.meta.evaluations).toBeGreaterThan(100); // At least some items per slot
+      });
+
+      test('tracks optimization time', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        expect(result.meta.timeMs).toBeGreaterThanOrEqual(0);
+        expect(typeof result.meta.timeMs).toBe('number');
+      });
+    });
+
+    describe('different monsters', () => {
+      test('produces different results for different monsters', () => {
+        const abyssalDemon = getTestMonster('Abyssal demon');
+        const corporealBeast = getTestMonster('Corporeal Beast');
+
+        const player = getTestPlayer(abyssalDemon, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const resultAbyssal = optimizeLoadout(player, abyssalDemon, { combatStyle: 'melee' });
+        const resultCorp = optimizeLoadout(player, corporealBeast, { combatStyle: 'melee' });
+
+        // DPS should be different for different monsters
+        // Corp beast has much higher defense
+        expect(resultAbyssal.metrics.dps).not.toBe(resultCorp.metrics.dps);
       });
     });
   });
