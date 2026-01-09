@@ -62,7 +62,7 @@
         "Given an equipment slot, return only items for that slot",
         "All 11 slots are supported (head, cape, neck, ammo, weapon, body, shield, legs, hands, feet, ring)"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
