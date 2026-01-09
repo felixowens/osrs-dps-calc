@@ -1,6 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import {
   filterBySlot, filterByCombatStyle, evaluateItem, evaluateItemDelta, calculateDps, createPlayerWithEquipment,
+  findBestItemForSlot,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -393,6 +394,201 @@ describe('Optimizer', () => {
 
       expect(newPlayer.equipment.weapon).toBeNull();
       expect(newPlayer.offensive.slash).toBeLessThan(player.offensive.slash);
+    });
+  });
+
+  describe('findBestItemForSlot (opt-002)', () => {
+    const abyssalWhip = findEquipment('Abyssal whip');
+    const rapier = findEquipment('Ghrazi rapier');
+
+    test('returns a SlotOptimizationResult with all required fields', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const result = findBestItemForSlot('weapon', player, monster);
+
+      expect(result).toHaveProperty('slot');
+      expect(result).toHaveProperty('bestItem');
+      expect(result).toHaveProperty('score');
+      expect(result).toHaveProperty('candidates');
+      expect(result.slot).toBe('weapon');
+    });
+
+    test('finds the best weapon from all weapons', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const result = findBestItemForSlot('weapon', player, monster);
+
+      // Should find some weapon (likely a high-tier one)
+      expect(result.bestItem).not.toBeNull();
+      expect(result.bestItem?.slot).toBe('weapon');
+      expect(result.score).toBeGreaterThan(0);
+    });
+
+    test('candidates are sorted by score descending', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      // Use a small subset to make the test faster
+      const weapons = filterBySlot('weapon').slice(0, 20);
+      const result = findBestItemForSlot('weapon', player, monster, weapons);
+
+      // Check that candidates are sorted by score (descending)
+      for (let i = 1; i < result.candidates.length; i++) {
+        expect(result.candidates[i - 1].score).toBeGreaterThanOrEqual(result.candidates[i].score);
+      }
+    });
+
+    test('best item matches first candidate', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const weapons = filterBySlot('weapon').slice(0, 20);
+      const result = findBestItemForSlot('weapon', player, monster, weapons);
+
+      // Best item should be the first in the sorted candidates list
+      expect(result.bestItem).toBe(result.candidates[0].item);
+      expect(result.score).toBe(result.candidates[0].score);
+    });
+
+    test('returns empty result when no candidates match slot', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      // Pass body armor when looking for weapons - should return empty
+      const bodyArmor = filterBySlot('body').slice(0, 5);
+      const result = findBestItemForSlot('weapon', player, monster, bodyArmor);
+
+      expect(result.bestItem).toBeNull();
+      expect(result.score).toBe(0);
+      expect(result.candidates).toHaveLength(0);
+    });
+
+    test('returns empty result when candidates array is empty', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const result = findBestItemForSlot('weapon', player, monster, []);
+
+      expect(result.bestItem).toBeNull();
+      expect(result.score).toBe(0);
+      expect(result.candidates).toHaveLength(0);
+    });
+
+    test('works with pre-filtered candidates', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      // Pre-filter to just melee weapons
+      const meleeWeapons = filterByCombatStyle('melee', filterBySlot('weapon'));
+      const result = findBestItemForSlot('weapon', player, monster, meleeWeapons);
+
+      expect(result.bestItem).not.toBeNull();
+      expect(result.candidates.length).toBeGreaterThan(0);
+      expect(result.candidates.length).toBeLessThanOrEqual(meleeWeapons.length);
+    });
+
+    test('finds best head gear for melee', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const result = findBestItemForSlot('head', player, monster);
+
+      expect(result.bestItem).not.toBeNull();
+      expect(result.bestItem?.slot).toBe('head');
+      expect(result.score).toBeGreaterThan(0);
+    });
+
+    describe('with constraints', () => {
+      test('respects blacklist constraint', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        // Get rapier ID for blacklisting
+        const rapierId = rapier.id;
+
+        // Find best without blacklist
+        const weapons = [abyssalWhip, rapier];
+        const resultWithoutBlacklist = findBestItemForSlot('weapon', player, monster, weapons);
+
+        // Find best with rapier blacklisted
+        const resultWithBlacklist = findBestItemForSlot('weapon', player, monster, weapons, {
+          blacklistedItems: new Set([rapierId]),
+        });
+
+        // Rapier is likely better than whip, so with blacklist we should get whip
+        expect(resultWithoutBlacklist.candidates.some((c) => c.item.id === rapierId)).toBe(true);
+        expect(resultWithBlacklist.candidates.some((c) => c.item.id === rapierId)).toBe(false);
+      });
+
+      test('blacklisting all candidates returns empty result', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const weapons = [abyssalWhip, rapier];
+        const allIds = new Set([abyssalWhip.id, rapier.id]);
+
+        const result = findBestItemForSlot('weapon', player, monster, weapons, {
+          blacklistedItems: allIds,
+        });
+
+        expect(result.bestItem).toBeNull();
+        expect(result.score).toBe(0);
+        expect(result.candidates).toHaveLength(0);
+      });
+
+      test('empty blacklist has no effect', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const weapons = [abyssalWhip, rapier];
+
+        const resultNoConstraints = findBestItemForSlot('weapon', player, monster, weapons);
+        const resultEmptyBlacklist = findBestItemForSlot('weapon', player, monster, weapons, {
+          blacklistedItems: new Set(),
+        });
+
+        expect(resultNoConstraints.candidates.length).toBe(resultEmptyBlacklist.candidates.length);
+        expect(resultNoConstraints.bestItem?.id).toBe(resultEmptyBlacklist.bestItem?.id);
+      });
+    });
+
+    describe('performance', () => {
+      test('evaluates all candidates in the list', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const weapons = filterBySlot('weapon').slice(0, 50);
+        const result = findBestItemForSlot('weapon', player, monster, weapons);
+
+        // All candidates should be evaluated
+        expect(result.candidates.length).toBe(50);
+      });
     });
   });
 });

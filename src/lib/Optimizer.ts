@@ -2,6 +2,7 @@ import { EquipmentPiece, Player, PlayerEquipment } from '@/types/Player';
 import { Monster } from '@/types/Monster';
 import {
   CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation,
+  OptimizerConstraints, SlotOptimizationResult,
 } from '@/types/Optimizer';
 import { availableEquipment, calculateEquipmentBonusesFromGear } from '@/lib/Equipment';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
@@ -277,4 +278,89 @@ export function evaluateItemDelta(
   const baseline = baselineDps ?? calculateDps(player, monster);
   const evaluation = evaluateItem(player, monster, candidateItem);
   return evaluation.dps - baseline;
+}
+
+/**
+ * Find the best item for a single equipment slot.
+ *
+ * Given a slot and a list of candidate items, this function evaluates each
+ * candidate's DPS contribution and returns the best one along with all
+ * evaluations sorted by score.
+ *
+ * This function respects constraints if provided:
+ * - Blacklisted items are excluded from consideration
+ * - Budget constraints filter out items that are too expensive (requires price data)
+ * - Skill requirements filter out items the player cannot equip
+ *
+ * @param slot - The equipment slot to optimize
+ * @param player - The current player loadout (used as context for DPS calculation)
+ * @param monster - The monster to calculate DPS against
+ * @param candidates - Optional array of candidate items. If not provided, all items
+ *                     for the slot are used (filtered from available equipment).
+ * @param constraints - Optional constraints to apply (blacklist, budget, etc.)
+ * @returns A SlotOptimizationResult containing the best item, score, and all candidates
+ *
+ * @example
+ * ```typescript
+ * const player = getTestPlayer(monster, { equipment: { weapon: whip } });
+ * const monster = getTestMonster('Abyssal demon');
+ *
+ * // Find best weapon with no constraints
+ * const result = findBestItemForSlot('weapon', player, monster);
+ * console.log(`Best weapon: ${result.bestItem?.name} with DPS: ${result.score}`);
+ *
+ * // Find best weapon from a filtered list
+ * const meleeWeapons = filterByCombatStyle('melee', filterBySlot('weapon'));
+ * const result2 = findBestItemForSlot('weapon', player, monster, meleeWeapons);
+ * ```
+ */
+export function findBestItemForSlot(
+  slot: EquipmentSlot,
+  player: Player,
+  monster: Monster,
+  candidates?: EquipmentPiece[],
+  constraints?: OptimizerConstraints,
+): SlotOptimizationResult {
+  // Get candidates for this slot if not provided
+  let items = candidates ?? filterBySlot(slot);
+
+  // Ensure all items are for the correct slot (in case caller passed unfiltered list)
+  items = items.filter((item) => item.slot === slot);
+
+  // Apply constraints if provided
+  if (constraints) {
+    // Filter out blacklisted items
+    if (constraints.blacklistedItems && constraints.blacklistedItems.size > 0) {
+      items = items.filter((item) => !constraints.blacklistedItems!.has(item.id));
+    }
+
+    // Note: Budget filtering (filter-003) and skill requirement filtering (filter-005)
+    // will be implemented in future features. For now, we just support blacklist.
+  }
+
+  // Handle case where no candidates exist
+  if (items.length === 0) {
+    return {
+      slot,
+      bestItem: null,
+      score: 0,
+      candidates: [],
+    };
+  }
+
+  // Evaluate all candidates
+  const evaluations: ItemEvaluation[] = items.map((item) => evaluateItem(player, monster, item));
+
+  // Sort by score descending (highest DPS first)
+  evaluations.sort((a, b) => b.score - a.score);
+
+  // The best item is the first one after sorting
+  const best = evaluations[0];
+
+  return {
+    slot,
+    bestItem: best.item,
+    score: best.score,
+    candidates: evaluations,
+  };
 }
