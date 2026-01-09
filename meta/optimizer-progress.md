@@ -90,3 +90,42 @@ This file tracks the progress of the gear optimizer implementation.
 - Tests verify specific items (Abyssal whip, Twisted bow, Ancestral hat, etc.) are correctly categorized
 
 **Next feature to work on:** opt-001 - Optimizer can evaluate a single equipment item's contribution to DPS
+
+---
+
+## 2026-01-09 (continued)
+
+**Feature completed:** opt-001 - Optimizer can evaluate a single equipment item's contribution to DPS
+
+**What was implemented:**
+- Added `evaluateItem(player, monster, candidateItem)` function to `src/lib/Optimizer.ts`:
+  - Takes a player loadout, monster, and candidate equipment piece
+  - Swaps the candidate item into the appropriate slot
+  - Calculates DPS using the existing PlayerVsNPCCalc engine
+  - Returns an ItemEvaluation with item, dps, and score properties
+
+- Added helper functions:
+  - `createPlayerWithEquipment(player, slot, item, monster)` - Creates a copy of the player with modified equipment and recalculated bonuses
+  - `calculateDps(player, monster)` - Simple wrapper for PlayerVsNPCCalc DPS calculation
+  - `evaluateItemDelta(player, monster, candidateItem, baselineDps?)` - Convenience function that returns the DPS difference
+
+- Added comprehensive tests in `src/tests/lib/Optimizer.test.ts`:
+  - Tests that better items produce higher DPS scores
+  - Tests that armor pieces are evaluated correctly
+  - Tests for DPS delta calculations (positive/negative/zero)
+  - Tests for createPlayerWithEquipment functionality
+  - All 28 tests pass
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added evaluation functions)
+- `src/tests/lib/Optimizer.test.ts` (modified - added tests for opt-001)
+
+**Commit:** 0c4dc00d
+
+**Notes for next agent:**
+- The `evaluateItem` function uses the existing PlayerVsNPCCalc for accurate calculations
+- The `score` field currently equals `dps`, but is designed to support other objectives (accuracy, max_hit) in the future
+- When swapping weapons, be aware that combat style affects DPS (e.g., whip uses slash, rapier uses stab)
+- The `createPlayerWithEquipment` function properly recalculates all equipment bonuses after swapping
+
+**Next feature to work on:** opt-002 - Optimizer can find best item for a single slot

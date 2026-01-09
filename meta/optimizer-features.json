@@ -121,7 +121,7 @@
         "Uses existing PlayerVsNPCCalc for accurate calculations",
         "Returns numeric score for comparison"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
