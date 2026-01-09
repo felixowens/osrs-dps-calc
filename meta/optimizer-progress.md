@@ -169,3 +169,56 @@ This file tracks the progress of the gear optimizer implementation.
 - For opt-003, this function can be called for each slot to build a complete loadout
 
 **Next feature to work on:** opt-003 - Optimizer can build a complete optimized loadout
+
+---
+
+## 2026-01-09 (continued)
+
+**Feature completed:** opt-003 - Optimizer can build a complete optimized loadout
+
+**What was implemented:**
+- Added `optimizeLoadout(player, monster, options?)` function to `src/lib/Optimizer.ts`:
+  - Optimizes all 11 equipment slots using a greedy per-slot algorithm
+  - Starts with weapon (highest DPS impact) and proceeds through all slots
+  - Progressively updates player state between slot evaluations for accurate DPS calculations
+  - Returns an `OptimizerResult` with:
+    - `equipment`: Complete PlayerEquipment object with optimized items
+    - `metrics`: DPS, accuracy, and max hit values calculated from the complete loadout
+    - `cost`: Total and per-slot cost (placeholder for price data - data-001)
+    - `meta`: Number of evaluations and optimization time in milliseconds
+
+- Added `OptimizeLoadoutOptions` interface for configuration:
+  - `combatStyle`: Optional filter for melee/ranged/magic equipment
+  - `constraints`: Optional OptimizerConstraints (blacklist support)
+
+- Added `createPlayerFromEquipment()` helper function:
+  - Creates a player with a complete equipment set and recalculated bonuses
+
+- Added `SLOT_OPTIMIZATION_ORDER` constant:
+  - Defines optimal slot evaluation order (weapon first for maximum impact)
+
+- Added comprehensive tests in `src/tests/lib/Optimizer.test.ts`:
+  - Tests for OptimizerResult structure and required fields
+  - Tests for complete PlayerEquipment object
+  - Tests for positive DPS metrics (dps, accuracy, maxHit)
+  - Tests for combat style filtering
+  - Tests for blacklist constraint support
+  - Tests for metrics recalculation with full loadout
+  - Tests for evaluation count and timing metadata
+  - Tests for different monster targets
+  - All 50 tests pass (10 new tests added)
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added optimizeLoadout, OptimizeLoadoutOptions, createPlayerFromEquipment)
+- `src/tests/lib/Optimizer.test.ts` (modified - added tests for opt-003)
+
+**Commit:** d89c757e
+
+**Notes for next agent:**
+- The optimizer uses a greedy per-slot algorithm which may miss set bonus synergies
+- Set bonus handling will be added in opt-006/opt-007
+- Two-handed weapon handling (opt-004) is the next priority - currently 2H weapons can be selected but shield slot isn't skipped
+- Cost tracking is stubbed out (returns 0) pending price data implementation (data-001)
+- The optimization order prioritizes weapon first, shield second (for 2H comparison in future)
+
+**Next feature to work on:** opt-004 - Optimizer handles two-handed weapons correctly

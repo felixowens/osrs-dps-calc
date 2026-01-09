@@ -145,7 +145,7 @@
         "Produces a complete PlayerEquipment object",
         "Returns total DPS and per-slot breakdown"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
