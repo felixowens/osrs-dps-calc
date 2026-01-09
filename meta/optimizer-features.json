@@ -75,7 +75,7 @@
         "Given 'magic', return items with magic bonuses",
         "Items with no offensive bonuses (e.g., pure defensive) are included for all styles"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {

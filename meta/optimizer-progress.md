@@ -50,3 +50,43 @@ This file tracks the progress of the gear optimizer implementation.
 - The slot type is `keyof PlayerEquipment` which matches the existing codebase patterns
 
 **Next feature to work on:** filter-002 - Equipment can be filtered by combat style
+
+---
+
+## 2026-01-09 (continued)
+
+**Feature completed:** filter-002 - Equipment can be filtered by combat style
+
+**What was implemented:**
+- Added `filterByCombatStyle(style, equipment?)` function to `src/lib/Optimizer.ts`:
+  - Filters equipment by combat style: 'melee', 'ranged', or 'magic'
+  - Melee: items with stab/slash/crush attack bonuses or strength bonus
+  - Ranged: items with ranged attack bonus or ranged strength bonus
+  - Magic: items with magic attack bonus or magic damage bonus
+  - Neutral items (no offensive bonuses) are included for all styles
+
+- Added helper functions (internal):
+  - `hasMeleeBonuses(item)` - checks for melee offensive stats
+  - `hasRangedBonuses(item)` - checks for ranged offensive stats
+  - `hasMagicBonuses(item)` - checks for magic offensive stats
+  - `hasAnyOffensiveBonuses(item)` - identifies neutral items
+
+- Created `src/tests/lib/Optimizer.test.ts` with comprehensive tests:
+  - Tests for each combat style including and excluding appropriate items
+  - Tests for neutral items being included in all styles
+  - Tests for chaining filters (slot + combat style)
+  - All 14 tests pass
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified)
+- `src/tests/lib/Optimizer.test.ts` (new)
+
+**Commit:** 23e43e6e
+
+**Notes for next agent:**
+- The `filterByCombatStyle` function can be chained with `filterBySlot` for combined filtering
+- Neutral items (no offensive bonuses) are included in all styles to support defensive gear
+- The implementation uses positive bonus checks (> 0) to determine style relevance
+- Tests verify specific items (Abyssal whip, Twisted bow, Ancestral hat, etc.) are correctly categorized
+
+**Next feature to work on:** opt-001 - Optimizer can evaluate a single equipment item's contribution to DPS
