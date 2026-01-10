@@ -950,3 +950,52 @@ This file tracks the progress of the gear optimizer implementation.
 - Integration features (int-001, int-002, etc.) should be evaluated - some may already be working
 
 **Next feature to work on:** ui-011 - Results show comparison to current loadout (medium priority)
+
+---
+
+## 2026-01-10 (ui-013 - tooltips)
+
+**Feature completed:** ui-013 - User can see optimized gear with tooltips and link to item page
+
+**What was implemented:**
+- Created `ItemTooltip` component (`src/app/components/optimizer/ItemTooltip.tsx`):
+  - Rich tooltip content showing item name, stats, and price
+  - Displays offensive bonuses (stab, slash, crush, ranged, magic) with color coding
+  - Displays defensive bonuses when present
+  - Displays other bonuses (strength, ranged strength, magic damage %, prayer)
+  - Shows attack speed in seconds and game ticks for weapons
+  - Shows weapon category/type for weapons
+  - Displays GE price (or "Unknown" if not loaded)
+  - Includes "View on Wiki" link at bottom of tooltip
+- Created `getWikiUrl(itemId)` helper function for generating OSRS Wiki item lookup URLs
+- Updated `ResultSlot` component in `OptimizerResults.tsx`:
+  - Items are now clickable links that open the Wiki page in a new tab
+  - Items use a custom tooltip (`item-tooltip`) with rich content
+  - Empty slots still show simple text tooltip
+  - Added hover effect (blue border) to indicate clickability
+- Added dedicated `Tooltip` component with render prop for item tooltips:
+  - Uses react-tooltip v5 with `clickable` prop to allow link interaction
+  - Tooltip content is rendered dynamically based on hovered item
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript type checking passes
+- All 173 Optimizer tests pass
+- Production build succeeds
+
+**Files changed:**
+- `src/app/components/optimizer/ItemTooltip.tsx` (new)
+- `src/app/components/optimizer/OptimizerResults.tsx` (modified)
+- `meta/optimizer-features.json` (modified - marked ui-013 tooltips as passing)
+
+**Commit:** [pending]
+
+**Notes for next agent:**
+- The tooltip is clickable so users can interact with the "View on Wiki" link
+- Items themselves are also clickable and link directly to the Wiki
+- Price display requires prices to be loaded (via `fetchAndLoadPrices()`)
+- The wiki URL uses the Special:Lookup pattern which redirects to the actual item page
+- Attack range is not displayed as it's not available in the equipment data
+- Zero-value stats are hidden for cleaner display
+
+**Next feature to work on:** ui-011 - Results show comparison to current loadout (medium priority)

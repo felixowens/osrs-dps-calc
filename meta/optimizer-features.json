@@ -460,7 +460,7 @@
         "Each item has a link to the item page in the GE database",
         "Tooltips and links are visible on hover"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {

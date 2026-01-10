@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { Tooltip } from 'react-tooltip';
 import { IconCheck, IconX } from '@tabler/icons-react';
 import { OptimizerResult, EquipmentSlot } from '@/types/Optimizer';
-import { PlayerEquipment } from '@/types/Player';
+import { EquipmentPiece, PlayerEquipment } from '@/types/Player';
 import { getCdnImage } from '@/utils';
 import { formatBudget } from '@/app/components/optimizer/BudgetInput';
+import ItemTooltip, { getWikiUrl } from '@/app/components/optimizer/ItemTooltip';
 import head from '@/public/img/slots/head.png';
 import cape from '@/public/img/slots/cape.png';
 import neck from '@/public/img/slots/neck.png';
@@ -50,25 +52,54 @@ const ResultSlot: React.FC<{
   const item = equipment[slot];
   const placeholder = SLOT_PLACEHOLDERS[slot];
 
+  // If there's an item, make it clickable and use the item tooltip
+  if (item) {
+    return (
+      <div className="flex flex-col items-center">
+        <a
+          href={getWikiUrl(item.id)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex justify-center items-center h-[40px] w-[40px] bg-dark-400 border border-dark-300 rounded cursor-pointer hover:border-blue-400 transition-colors"
+          data-tooltip-id="item-tooltip"
+          data-item-id={item.id}
+        >
+          <img src={getCdnImage(`equipment/${item.image}`)} alt={item.name} />
+        </a>
+        {cost !== undefined && cost > 0 && (
+          <span className="text-[10px] text-yellow-400 mt-0.5">{formatBudget(cost)}</span>
+        )}
+      </div>
+    );
+  }
+
+  // Empty slot - show placeholder
   return (
     <div className="flex flex-col items-center">
       <div
         className="flex justify-center items-center h-[40px] w-[40px] bg-dark-400 border border-dark-300 rounded"
         data-tooltip-id="tooltip"
-        data-tooltip-content={item?.name || `Empty ${slot}`}
+        data-tooltip-content={`Empty ${slot}`}
       >
-        {item?.image ? (
-          <img src={getCdnImage(`equipment/${item.image}`)} alt={item.name} />
-        ) : (
-          <img className="opacity-30 dark:filter dark:invert" src={placeholder} alt={slot} />
-        )}
+        <img className="opacity-30 dark:filter dark:invert" src={placeholder} alt={slot} />
       </div>
-      {cost !== undefined && cost > 0 && (
-        <span className="text-[10px] text-yellow-400 mt-0.5">{formatBudget(cost)}</span>
-      )}
     </div>
   );
 };
+
+/**
+ * Get an item from the equipment by its ID.
+ * Used by the tooltip render function to find the item data.
+ */
+function getItemFromEquipment(equipment: PlayerEquipment, itemId: number): EquipmentPiece | null {
+  for (const slot of Object.keys(equipment) as EquipmentSlot[]) {
+    const item = equipment[slot];
+    if (item && item.id === itemId) {
+      return item;
+    }
+  }
+  return null;
+}
 
 /**
  * Display the optimized equipment in a grid similar to the main equipment grid
@@ -265,6 +296,23 @@ const OptimizerResults: React.FC<OptimizerResultsProps> = ({ result, onApply, lo
         {meta.timeMs.toFixed(0)}
         ms
       </div>
+
+      {/* Item tooltip - renders rich content for equipment items */}
+      <Tooltip
+        id="item-tooltip"
+        className="z-50"
+        place="top"
+        delayShow={100}
+        clickable
+        render={({ activeAnchor }) => {
+          const itemIdStr = activeAnchor?.getAttribute('data-item-id');
+          if (!itemIdStr) return null;
+          const itemId = parseInt(itemIdStr);
+          const item = getItemFromEquipment(equipment, itemId);
+          if (!item) return null;
+          return <ItemTooltip item={item} />;
+        }}
+      />
     </div>
   );
 };
