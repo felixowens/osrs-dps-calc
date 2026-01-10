@@ -1119,7 +1119,7 @@ The optimizer's `createPlayerWithEquipment()` function uses `{ ...player }` whic
 - `meta/optimizer-features.json` (modified - marked int-001 and int-002 as passing)
 - `meta/optimizer-progress.md` (modified - added this entry)
 
-**Commit:** (pending)
+**Commit:** 100fbe0c
 
 **Notes for next agent:**
 - The remaining high-priority integration feature is int-004 (optimizer state integrates with main app state)
