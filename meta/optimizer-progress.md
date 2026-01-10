@@ -1233,3 +1233,53 @@ The optimizer's `createPlayerWithEquipment()` function uses `{ ...player }` whic
   - weapon-001/002/003: Special weapon handling (blowpipe, powered staves, crossbows)
 
 **Next feature to work on:** int-003 (slayer task verification) or data-004/filter-005/ui-008 (skill requirements)
+
+---
+
+## 2026-01-10 (int-003)
+
+**Feature verified and marked complete:** int-003 - Optimizer respects slayer task setting
+
+**Verification summary:**
+
+The slayer task setting is already fully functional through the existing DPS calculation engine:
+
+1. **Slayer helm bonus factored in:**
+   - `PlayerVsNPCCalc` checks `player.buffs.onSlayerTask` in multiple locations
+   - Applies +7/6 multiplier for melee, +23/20 for ranged (imbued)
+   - Applied to both accuracy and max hit calculations
+
+2. **Slayer helm naturally prioritized:**
+   - Optimizer evaluates items by DPS score
+   - When on task, slayer helm provides +15% bonus, naturally producing higher DPS
+   - No special prioritization code needed - DPS-driven selection handles it
+
+3. **Black mask variants supported:**
+   - `isWearingBlackMask()` in BaseCalc.ts (line 277) covers:
+     - Black mask (non-imbued)
+     - Slayer helmet (non-imbued)
+     - Black mask (i) - imbued
+     - Slayer helmet (i) - imbued
+   - `isWearingImbuedBlackMask()` handles imbued-specific bonuses for ranged/magic
+
+**Why it works:**
+- Player buffs (including `onSlayerTask`) are preserved via spread operator in optimizer functions
+- The `evaluateItem()` function uses `PlayerVsNPCCalc` which checks the slayer task flag
+- Items with higher DPS naturally win, so slayer helm wins when on task
+
+**Files changed:**
+- `meta/optimizer-features.json` (marked int-003 as passing)
+- `meta/optimizer-progress.md` (this entry)
+
+**Commit:** (pending)
+
+**Notes for next agent:**
+- All integration features (int-001 through int-004) are now complete
+- The DPS calculator handles all slayer-related bonuses correctly
+- Remaining medium-priority features:
+  - data-004/filter-005/ui-008: Skill requirements (coherent group)
+  - opt-006/opt-007: Set bonus detection and evaluation
+  - weapon-001/002/003: Special weapon handling
+  - worker-002/ui-009: Progress reporting
+
+**Next feature to work on:** data-004 - Equipment skill requirements are accessible

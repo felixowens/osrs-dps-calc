@@ -496,7 +496,7 @@
         "Slayer helm is prioritized when on task",
         "Black mask variants are considered"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {
