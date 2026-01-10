@@ -360,3 +360,41 @@ This file tracks the progress of the gear optimizer implementation.
 - Set `excludeUnknownPrices: true` to exclude items without price data
 
 **Next feature to work on:** filter-004 - Equipment can be filtered by blacklist
+
+---
+
+## 2026-01-10 (continued)
+
+**Feature completed:** filter-004 - Equipment can be filtered by blacklist
+
+**What was implemented:**
+- Added `filterByBlacklist(blacklist, equipment?)` function to `src/lib/Optimizer.ts`:
+  - Takes a Set of item IDs to blacklist and optional equipment array
+  - Returns only items NOT in the blacklist
+  - Optimized to return input array unchanged when blacklist is empty
+  - Can chain with other filters (filterBySlot, filterByCombatStyle, filterByBudget)
+- Added comprehensive tests (15 new tests) in `src/tests/lib/Optimizer.test.ts`:
+  - Tests for excluding blacklisted items from results
+  - Tests for empty blacklist returning all items
+  - Tests for blacklisting all items returning empty array
+  - Tests for non-existent IDs having no effect
+  - Tests for chaining with filterBySlot, filterByCombatStyle, filterByBudget
+  - Tests for multiple filters in sequence
+  - Tests for edge cases (empty array, preserving references, not modifying original)
+  - Integration test confirming filterByBlacklist works the same as constraints in findBestItemForSlot
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added filterByBlacklist function)
+- `src/tests/lib/Optimizer.test.ts` (modified - added 15 tests for filter-004)
+- `meta/optimizer-features.json` (modified - marked filter-004 as passing)
+
+**Commit:** 5f8b759
+
+**Notes for next agent:**
+- Both `filterByBlacklist` and `findBestItemForSlot` with constraints.blacklistedItems work equivalently
+- `filterByBlacklist` is useful for pre-filtering equipment before optimization
+- The function is chainable: `filterByBlacklist(blacklist, filterBySlot('weapon'))`
+- The constraints-based approach is built into optimizer functions (findBestItemForSlot, optimizeLoadout)
+- All filtering functions now complete: slot (filter-001), combat style (filter-002), budget (filter-003), blacklist (filter-004)
+
+**Next feature to work on:** opt-008 - Optimizer respects total budget constraint (Phase 2)

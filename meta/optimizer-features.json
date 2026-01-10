@@ -98,7 +98,7 @@
         "Blacklisted items are excluded from results",
         "Filtering works in combination with other filters"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
