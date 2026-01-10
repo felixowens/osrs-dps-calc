@@ -17,6 +17,8 @@ import {
   calculateLoadoutCost,
   // Price fetching (data-001)
   arePricesLoaded, getPriceStoreSize, getLastPriceFetchTime, fetchAndLoadPrices, refreshPrices,
+  // Objective-based optimization (opt-009)
+  calculateMetrics, getScoreForObjective,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -261,6 +263,101 @@ describe('Optimizer', () => {
       const evaluation = evaluateItem(player, monster, rapier);
 
       expect(evaluation.score).toBe(evaluation.dps);
+    });
+
+    describe('with different objectives (opt-009)', () => {
+      test('objective accuracy uses hit chance as score', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const evalDps = evaluateItem(player, monster, rapier, 'dps');
+        const evalAccuracy = evaluateItem(player, monster, rapier, 'accuracy');
+
+        // DPS score equals the dps value
+        expect(evalDps.score).toBe(evalDps.dps);
+
+        // Accuracy score is between 0 and 1 (hit chance)
+        expect(evalAccuracy.score).toBeGreaterThan(0);
+        expect(evalAccuracy.score).toBeLessThanOrEqual(1);
+
+        // The DPS is always tracked
+        expect(evalAccuracy.dps).toBe(evalDps.dps);
+      });
+
+      test('objective max_hit uses max hit as score', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const evalDps = evaluateItem(player, monster, rapier, 'dps');
+        const evalMaxHit = evaluateItem(player, monster, rapier, 'max_hit');
+
+        // Max hit score is a positive integer (the max hit)
+        expect(evalMaxHit.score).toBeGreaterThan(0);
+        expect(Number.isInteger(evalMaxHit.score)).toBe(true);
+
+        // The DPS is always tracked
+        expect(evalMaxHit.dps).toBe(evalDps.dps);
+      });
+
+      test('different objectives can rank items differently', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        // Compare two helmets with different bonuses
+        const evalTorva = evaluateItem(player, monster, torvaHelm, 'max_hit');
+        const evalNezzy = evaluateItem(player, monster, nezzyHelm, 'max_hit');
+
+        // Both should have max hit scores
+        expect(evalTorva.score).toBeGreaterThan(0);
+        expect(evalNezzy.score).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('calculateMetrics and getScoreForObjective', () => {
+    const abyssalWhip = findEquipment('Abyssal whip');
+
+    test('calculateMetrics returns all three metrics', () => {
+      const monster = getTestMonster('Abyssal demon');
+      const player = getTestPlayer(monster, {
+        equipment: { weapon: abyssalWhip },
+      });
+
+      const metrics = calculateMetrics(player, monster);
+
+      expect(metrics).toHaveProperty('dps');
+      expect(metrics).toHaveProperty('accuracy');
+      expect(metrics).toHaveProperty('maxHit');
+      expect(metrics.dps).toBeGreaterThan(0);
+      expect(metrics.accuracy).toBeGreaterThan(0);
+      expect(metrics.accuracy).toBeLessThanOrEqual(1);
+      expect(metrics.maxHit).toBeGreaterThan(0);
+    });
+
+    test('getScoreForObjective returns dps for dps objective', () => {
+      const metrics = { dps: 5.5, accuracy: 0.95, maxHit: 40 };
+      expect(getScoreForObjective(metrics, 'dps')).toBe(5.5);
+    });
+
+    test('getScoreForObjective returns accuracy for accuracy objective', () => {
+      const metrics = { dps: 5.5, accuracy: 0.95, maxHit: 40 };
+      expect(getScoreForObjective(metrics, 'accuracy')).toBe(0.95);
+    });
+
+    test('getScoreForObjective returns maxHit for max_hit objective', () => {
+      const metrics = { dps: 5.5, accuracy: 0.95, maxHit: 40 };
+      expect(getScoreForObjective(metrics, 'max_hit')).toBe(40);
+    });
+
+    test('getScoreForObjective defaults to dps', () => {
+      const metrics = { dps: 5.5, accuracy: 0.95, maxHit: 40 };
+      expect(getScoreForObjective(metrics)).toBe(5.5);
     });
   });
 
@@ -713,6 +810,85 @@ describe('Optimizer', () => {
       });
     });
 
+    describe('with objective option (opt-009)', () => {
+      test('optimizes for DPS by default', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Should produce positive DPS metrics
+        expect(result.metrics.dps).toBeGreaterThan(0);
+      });
+
+      test('can optimize for accuracy', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          objective: 'accuracy',
+        });
+
+        // Should still produce all metrics
+        expect(result.metrics.dps).toBeGreaterThan(0);
+        expect(result.metrics.accuracy).toBeGreaterThan(0);
+        expect(result.metrics.maxHit).toBeGreaterThan(0);
+      });
+
+      test('can optimize for max hit', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          objective: 'max_hit',
+        });
+
+        // Should still produce all metrics
+        expect(result.metrics.dps).toBeGreaterThan(0);
+        expect(result.metrics.accuracy).toBeGreaterThan(0);
+        expect(result.metrics.maxHit).toBeGreaterThan(0);
+      });
+
+      test('objective selection affects optimization', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: {},
+        });
+
+        // Run optimization with different objectives
+        const dpsResult = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          objective: 'dps',
+        });
+        const accuracyResult = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          objective: 'accuracy',
+        });
+        const maxHitResult = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          objective: 'max_hit',
+        });
+
+        // All results should be valid
+        expect(dpsResult.equipment.weapon).not.toBeNull();
+        expect(accuracyResult.equipment.weapon).not.toBeNull();
+        expect(maxHitResult.equipment.weapon).not.toBeNull();
+
+        // Each objective should produce valid metrics
+        expect(dpsResult.metrics.dps).toBeGreaterThan(0);
+        expect(accuracyResult.metrics.accuracy).toBeGreaterThan(0);
+        expect(maxHitResult.metrics.maxHit).toBeGreaterThan(0);
+      });
+    });
+
     describe('with constraints', () => {
       test('respects blacklist constraint', () => {
         const monster = getTestMonster('Abyssal demon');
@@ -951,7 +1127,7 @@ describe('Optimizer', () => {
 
         expect(result).toHaveProperty('weapon');
         expect(result).toHaveProperty('shield');
-        expect(result).toHaveProperty('dps');
+        expect(result).toHaveProperty('score');
         expect(result).toHaveProperty('is2H');
       });
 
@@ -986,7 +1162,7 @@ describe('Optimizer', () => {
         expect(result.shield).not.toBeNull();
       });
 
-      test('compares 2H vs 1H+shield and picks better DPS', () => {
+      test('compares 2H vs 1H+shield and picks better score', () => {
         const monster = getTestMonster('Abyssal demon');
         const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
 
@@ -996,8 +1172,8 @@ describe('Optimizer', () => {
 
         const result = findBestWeaponShieldCombination(player, monster, weapons, shields);
 
-        // Result should have positive DPS
-        expect(result.dps).toBeGreaterThan(0);
+        // Result should have positive score
+        expect(result.score).toBeGreaterThan(0);
 
         // Either 2H or 1H+shield based on what's better
         if (result.is2H) {
@@ -1018,7 +1194,7 @@ describe('Optimizer', () => {
 
         expect(result.weapon).toBeNull();
         expect(result.shield).toBeNull();
-        expect(result.dps).toBe(0);
+        expect(result.score).toBe(0);
       });
 
       test('handles empty shield list with 1H weapon', () => {

@@ -90,6 +90,7 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
           player: store.player,
           monster: store.monster,
           combatStyle,
+          objective,
           constraints: {
             maxBudget: budget ?? undefined,
             ownedItems: ownedItems.size > 0 ? ownedItems : undefined,
@@ -106,7 +107,7 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
     } finally {
       setIsLoading(false);
     }
-  }, [calc, store.player, store.monster, combatStyle, budget, ownedItems, blacklistedItems]);
+  }, [calc, store.player, store.monster, combatStyle, objective, budget, ownedItems, blacklistedItems]);
 
   // Apply optimized loadout to current loadout
   const applyLoadout = useCallback(() => {

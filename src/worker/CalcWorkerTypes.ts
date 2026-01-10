@@ -5,7 +5,9 @@ import { CalcOpts } from '@/lib/BaseCalc';
 import {
   CompareResult, CompareXAxis, CompareYAxis,
 } from '@/lib/Comparator';
-import { CombatStyle, OptimizerConstraints, OptimizerResult } from '@/types/Optimizer';
+import {
+  CombatStyle, OptimizationObjective, OptimizerConstraints, OptimizerResult,
+} from '@/types/Optimizer';
 
 /**
  * Requests
@@ -78,6 +80,8 @@ export interface OptimizeRequest extends WorkerRequest<WorkerRequestType.OPTIMIZ
     monster: Monster,
     /** Combat style to optimize for */
     combatStyle?: CombatStyle,
+    /** Optimization objective (dps, accuracy, max_hit) */
+    objective?: OptimizationObjective,
     /** Constraints for the optimization */
     constraints?: OptimizerConstraints,
   }

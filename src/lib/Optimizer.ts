@@ -2,7 +2,7 @@ import { EquipmentPiece, Player, PlayerEquipment } from '@/types/Player';
 import { Monster } from '@/types/Monster';
 import {
   CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation, ItemPrice,
-  OptimizerConstraints, OptimizerResult, SlotOptimizationResult,
+  OptimizationObjective, OptimizerConstraints, OptimizerResult, SlotOptimizationResult,
 } from '@/types/Optimizer';
 import {
   AmmoApplicability, ammoApplicability, availableEquipment, calculateEquipmentBonusesFromGear,
@@ -683,17 +683,56 @@ export function calculateDps(player: Player, monster: Monster): number {
 }
 
 /**
- * Evaluate a single equipment item's contribution to DPS.
+ * Calculate all combat metrics for a given player and monster.
+ *
+ * @param player - The player to calculate metrics for
+ * @param monster - The monster to calculate against
+ * @returns Object containing dps, accuracy, and maxHit
+ */
+export function calculateMetrics(player: Player, monster: Monster): { dps: number; accuracy: number; maxHit: number } {
+  const calc = new PlayerVsNPCCalc(player, monster);
+  return {
+    dps: calc.getDps(),
+    accuracy: calc.getHitChance(),
+    maxHit: calc.getMax(),
+  };
+}
+
+/**
+ * Get the score value for a given objective from the metrics.
+ *
+ * @param metrics - The calculated combat metrics
+ * @param objective - The optimization objective
+ * @returns The score value for the objective
+ */
+export function getScoreForObjective(
+  metrics: { dps: number; accuracy: number; maxHit: number },
+  objective: OptimizationObjective = 'dps',
+): number {
+  switch (objective) {
+    case 'accuracy':
+      return metrics.accuracy;
+    case 'max_hit':
+      return metrics.maxHit;
+    case 'dps':
+    default:
+      return metrics.dps;
+  }
+}
+
+/**
+ * Evaluate a single equipment item's contribution to combat performance.
  *
  * Given a current loadout and a candidate item, this function calculates
- * the DPS with the candidate item equipped. The result includes the DPS value
- * and can be compared against other items or the baseline loadout.
+ * the combat metrics with the candidate item equipped. The result includes
+ * DPS value and a score based on the optimization objective.
  *
- * This function uses the existing PlayerVsNPCCalc for accurate DPS calculations.
+ * This function uses the existing PlayerVsNPCCalc for accurate calculations.
  *
  * @param player - The current player loadout (used as baseline)
- * @param monster - The monster to calculate DPS against
+ * @param monster - The monster to calculate against
  * @param candidateItem - The equipment item to evaluate
+ * @param objective - The optimization objective (dps, accuracy, max_hit). Defaults to 'dps'.
  * @returns An ItemEvaluation containing the item, DPS, and score
  *
  * @example
@@ -702,15 +741,20 @@ export function calculateDps(player: Player, monster: Monster): number {
  * const monster = getTestMonster('Abyssal demon');
  * const rapier = findEquipment('Ghrazi rapier');
  *
- * // Evaluate how rapier would perform in this loadout
- * const evaluation = evaluateItem(player, monster, rapier);
+ * // Evaluate how rapier would perform in this loadout (optimizing for DPS)
+ * const evaluation = evaluateItem(player, monster, rapier, 'dps');
  * console.log(`Rapier DPS: ${evaluation.dps}`);
+ *
+ * // Evaluate for max hit instead
+ * const maxHitEval = evaluateItem(player, monster, rapier, 'max_hit');
+ * console.log(`Rapier score (max hit): ${maxHitEval.score}`);
  * ```
  */
 export function evaluateItem(
   player: Player,
   monster: Monster,
   candidateItem: EquipmentPiece,
+  objective: OptimizationObjective = 'dps',
 ): ItemEvaluation {
   // Determine which slot the item goes in
   const slot = candidateItem.slot as EquipmentSlot;
@@ -718,13 +762,16 @@ export function evaluateItem(
   // Create a player with the candidate item equipped
   const playerWithItem = createPlayerWithEquipment(player, slot, candidateItem, monster);
 
-  // Calculate DPS with the new item
-  const dps = calculateDps(playerWithItem, monster);
+  // Calculate all metrics with the new item
+  const metrics = calculateMetrics(playerWithItem, monster);
+
+  // Get the score based on the objective
+  const score = getScoreForObjective(metrics, objective);
 
   return {
     item: candidateItem,
-    dps,
-    score: dps, // For now, score equals DPS. Future objectives may use different scores.
+    dps: metrics.dps,
+    score,
   };
 }
 
@@ -756,8 +803,8 @@ export function evaluateItemDelta(
  * Find the best item for a single equipment slot.
  *
  * Given a slot and a list of candidate items, this function evaluates each
- * candidate's DPS contribution and returns the best one along with all
- * evaluations sorted by score.
+ * candidate's contribution to the optimization objective and returns the best
+ * one along with all evaluations sorted by score.
  *
  * This function respects constraints if provided:
  * - Blacklisted items are excluded from consideration
@@ -765,11 +812,12 @@ export function evaluateItemDelta(
  * - Skill requirements filter out items the player cannot equip
  *
  * @param slot - The equipment slot to optimize
- * @param player - The current player loadout (used as context for DPS calculation)
- * @param monster - The monster to calculate DPS against
+ * @param player - The current player loadout (used as context for calculation)
+ * @param monster - The monster to calculate against
  * @param candidates - Optional array of candidate items. If not provided, all items
  *                     for the slot are used (filtered from available equipment).
  * @param constraints - Optional constraints to apply (blacklist, budget, etc.)
+ * @param objective - The optimization objective (dps, accuracy, max_hit). Defaults to 'dps'.
  * @returns A SlotOptimizationResult containing the best item, score, and all candidates
  *
  * @example
@@ -777,13 +825,13 @@ export function evaluateItemDelta(
  * const player = getTestPlayer(monster, { equipment: { weapon: whip } });
  * const monster = getTestMonster('Abyssal demon');
  *
- * // Find best weapon with no constraints
+ * // Find best weapon with no constraints (defaults to DPS)
  * const result = findBestItemForSlot('weapon', player, monster);
  * console.log(`Best weapon: ${result.bestItem?.name} with DPS: ${result.score}`);
  *
- * // Find best weapon from a filtered list
- * const meleeWeapons = filterByCombatStyle('melee', filterBySlot('weapon'));
- * const result2 = findBestItemForSlot('weapon', player, monster, meleeWeapons);
+ * // Find best weapon for max hit
+ * const result2 = findBestItemForSlot('weapon', player, monster, undefined, undefined, 'max_hit');
+ * console.log(`Best weapon for max hit: ${result2.bestItem?.name} with score: ${result2.score}`);
  * ```
  */
 export function findBestItemForSlot(
@@ -792,6 +840,7 @@ export function findBestItemForSlot(
   monster: Monster,
   candidates?: EquipmentPiece[],
   constraints?: OptimizerConstraints,
+  objective: OptimizationObjective = 'dps',
 ): SlotOptimizationResult {
   // Get candidates for this slot if not provided
   let items = candidates ?? filterBySlot(slot);
@@ -820,10 +869,10 @@ export function findBestItemForSlot(
     };
   }
 
-  // Evaluate all candidates
-  const evaluations: ItemEvaluation[] = items.map((item) => evaluateItem(player, monster, item));
+  // Evaluate all candidates with the specified objective
+  const evaluations: ItemEvaluation[] = items.map((item) => evaluateItem(player, monster, item, objective));
 
-  // Sort by score descending (highest DPS first)
+  // Sort by score descending (highest first)
   evaluations.sort((a, b) => b.score - a.score);
 
   // The best item is the first one after sorting
@@ -940,12 +989,13 @@ export function filterValidAmmoForWeapon(
  * Find the best ammo for a ranged weapon.
  *
  * Given a weapon and the current player loadout, this function finds the
- * ammunition that produces the highest DPS.
+ * ammunition that produces the highest score for the optimization objective.
  *
  * @param player - The base player loadout (with weapon already equipped)
  * @param monster - The monster to optimize against
  * @param ammoCandidates - Candidate ammo items (should be pre-filtered to valid ammo)
  * @param constraints - Optional constraints to apply
+ * @param objective - The optimization objective (dps, accuracy, max_hit). Defaults to 'dps'.
  * @returns SlotOptimizationResult with the best ammo
  */
 export function findBestAmmoForWeapon(
@@ -953,16 +1003,18 @@ export function findBestAmmoForWeapon(
   monster: Monster,
   ammoCandidates: EquipmentPiece[],
   constraints?: OptimizerConstraints,
+  objective: OptimizationObjective = 'dps',
 ): SlotOptimizationResult {
   // Get the weapon ID from the player's equipment
   const weaponId = player.equipment.weapon?.id;
 
   if (!weaponId || !weaponRequiresAmmo(weaponId)) {
     // Weapon doesn't require ammo, return empty result
+    const metrics = calculateMetrics(player, monster);
     return {
       slot: 'ammo',
       bestItem: null,
-      score: calculateDps(player, monster), // DPS without ammo
+      score: getScoreForObjective(metrics, objective),
       candidates: [],
     };
   }
@@ -971,7 +1023,7 @@ export function findBestAmmoForWeapon(
   const validAmmo = filterValidAmmoForWeapon(weaponId, ammoCandidates);
 
   // Use findBestItemForSlot with the filtered ammo
-  return findBestItemForSlot('ammo', player, monster, validAmmo, constraints);
+  return findBestItemForSlot('ammo', player, monster, validAmmo, constraints, objective);
 }
 
 /**
@@ -981,14 +1033,15 @@ export function findBestAmmoForWeapon(
  * 1. Best two-handed weapon (no shield)
  * 2. Best one-handed weapon + best shield
  *
- * It returns the combination that produces the highest DPS.
+ * It returns the combination that produces the highest score for the objective.
  *
  * @param player - The base player loadout
  * @param monster - The monster to optimize against
  * @param weaponCandidates - Candidate weapons (filtered by style, etc.)
  * @param shieldCandidates - Candidate shields
  * @param constraints - Optional constraints to apply
- * @returns Object containing the best weapon, shield (or null for 2H), and combined DPS
+ * @param objective - The optimization objective (dps, accuracy, max_hit). Defaults to 'dps'.
+ * @returns Object containing the best weapon, shield (or null for 2H), score, and is2H flag
  */
 export function findBestWeaponShieldCombination(
   player: Player,
@@ -996,31 +1049,32 @@ export function findBestWeaponShieldCombination(
   weaponCandidates: EquipmentPiece[],
   shieldCandidates: EquipmentPiece[],
   constraints?: OptimizerConstraints,
-): { weapon: EquipmentPiece | null; shield: EquipmentPiece | null; dps: number; is2H: boolean } {
+  objective: OptimizationObjective = 'dps',
+): { weapon: EquipmentPiece | null; shield: EquipmentPiece | null; score: number; is2H: boolean } {
   // Separate weapons into 1H and 2H
   const oneHandedWeapons = filterOneHandedWeapons(weaponCandidates);
   const twoHandedWeapons = filterTwoHandedWeapons(weaponCandidates);
 
-  let best2HDps = 0;
+  let best2HScore = 0;
   let best2HWeapon: EquipmentPiece | null = null;
 
-  let best1HComboDps = 0;
+  let best1HComboScore = 0;
   let best1HWeapon: EquipmentPiece | null = null;
   let bestShield: EquipmentPiece | null = null;
 
   // Evaluate best 2H weapon
   if (twoHandedWeapons.length > 0) {
-    const result2H = findBestItemForSlot('weapon', player, monster, twoHandedWeapons, constraints);
+    const result2H = findBestItemForSlot('weapon', player, monster, twoHandedWeapons, constraints, objective);
     if (result2H.bestItem) {
       best2HWeapon = result2H.bestItem;
-      best2HDps = result2H.score;
+      best2HScore = result2H.score;
     }
   }
 
   // Evaluate best 1H + shield combination
   if (oneHandedWeapons.length > 0) {
     // Find best 1H weapon first
-    const result1H = findBestItemForSlot('weapon', player, monster, oneHandedWeapons, constraints);
+    const result1H = findBestItemForSlot('weapon', player, monster, oneHandedWeapons, constraints, objective);
     if (result1H.bestItem) {
       best1HWeapon = result1H.bestItem;
 
@@ -1029,28 +1083,28 @@ export function findBestWeaponShieldCombination(
 
       // Find best shield with the 1H weapon equipped
       if (shieldCandidates.length > 0) {
-        const resultShield = findBestItemForSlot('shield', playerWith1H, monster, shieldCandidates, constraints);
+        const resultShield = findBestItemForSlot('shield', playerWith1H, monster, shieldCandidates, constraints, objective);
         if (resultShield.bestItem) {
           bestShield = resultShield.bestItem;
-          // The shield result's score is the DPS with both 1H and shield equipped
-          best1HComboDps = resultShield.score;
+          // The shield result's score is with both 1H and shield equipped
+          best1HComboScore = resultShield.score;
         } else {
-          // No valid shield, use 1H weapon DPS alone
-          best1HComboDps = result1H.score;
+          // No valid shield, use 1H weapon score alone
+          best1HComboScore = result1H.score;
         }
       } else {
-        // No shield candidates, use 1H weapon DPS alone
-        best1HComboDps = result1H.score;
+        // No shield candidates, use 1H weapon score alone
+        best1HComboScore = result1H.score;
       }
     }
   }
 
   // Compare 2H vs 1H+shield and return the better option
-  if (best2HDps >= best1HComboDps && best2HWeapon) {
+  if (best2HScore >= best1HComboScore && best2HWeapon) {
     return {
       weapon: best2HWeapon,
       shield: null, // 2H weapons cannot use shield
-      dps: best2HDps,
+      score: best2HScore,
       is2H: true,
     };
   }
@@ -1058,7 +1112,7 @@ export function findBestWeaponShieldCombination(
   return {
     weapon: best1HWeapon,
     shield: bestShield,
-    dps: best1HComboDps,
+    score: best1HComboScore,
     is2H: false,
   };
 }
@@ -1268,6 +1322,8 @@ function applyBudgetConstraint(
 export interface OptimizeLoadoutOptions {
   /** Combat style to optimize for. If not provided, includes all styles. */
   combatStyle?: CombatStyle;
+  /** Optimization objective. Defaults to 'dps'. */
+  objective?: OptimizationObjective;
   /** Constraints to apply during optimization */
   constraints?: OptimizerConstraints;
 }
@@ -1336,7 +1392,7 @@ export function optimizeLoadout(
   const startTime = performance.now();
   let totalEvaluations = 0;
 
-  const { combatStyle, constraints } = options;
+  const { combatStyle, objective = 'dps', constraints } = options;
 
   // Pre-filter equipment by combat style if specified
   let candidatePool = availableEquipment;
@@ -1376,6 +1432,7 @@ export function optimizeLoadout(
     weaponCandidates,
     shieldCandidates,
     constraints,
+    objective,
   );
 
   // Track evaluations for weapon and shield
@@ -1402,7 +1459,7 @@ export function optimizeLoadout(
 
   if (weaponId && weaponRequiresAmmo(weaponId)) {
     // Filter to valid ammo for this weapon and find the best
-    const ammoResult = findBestAmmoForWeapon(currentPlayer, monster, ammoCandidates, constraints);
+    const ammoResult = findBestAmmoForWeapon(currentPlayer, monster, ammoCandidates, constraints, objective);
     totalEvaluations += ammoResult.candidates.length;
 
     optimizedEquipment.ammo = ammoResult.bestItem;
@@ -1422,7 +1479,7 @@ export function optimizeLoadout(
     const candidates = candidatesBySlot[slot];
 
     // Find the best item for this slot
-    const result = findBestItemForSlot(slot, currentPlayer, monster, candidates, constraints);
+    const result = findBestItemForSlot(slot, currentPlayer, monster, candidates, constraints, objective);
     totalEvaluations += result.candidates.length;
 
     // Update the optimized equipment

@@ -117,7 +117,7 @@ const compare: Handler<WorkerRequestType.COMPARE> = async (data) => {
  */
 const optimize: Handler<WorkerRequestType.OPTIMIZE> = async (data) => {
   const {
-    player, monster, combatStyle, constraints: rawConstraints,
+    player, monster, combatStyle, objective, constraints: rawConstraints,
   } = data;
 
   // Load prices if not already loaded (first optimization run)
@@ -158,7 +158,7 @@ const optimize: Handler<WorkerRequestType.OPTIMIZE> = async (data) => {
   }
 
   const start = self.performance.now();
-  const result = optimizeLoadout(player, monster, { combatStyle, constraints });
+  const result = optimizeLoadout(player, monster, { combatStyle, objective, constraints });
   const end = self.performance.now();
 
   console.debug(`Optimization took ${end - start}ms, ${result.meta.evaluations} evaluations`);
