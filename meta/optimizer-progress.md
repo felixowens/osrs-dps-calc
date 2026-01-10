@@ -265,3 +265,51 @@ This file tracks the progress of the gear optimizer implementation.
 - Ammunition handling (opt-005) is the next priority - ranged weapons need appropriate ammo selected
 
 **Next feature to work on:** opt-005 - Optimizer handles ammunition requirements
+
+---
+
+## 2026-01-09 (continued)
+
+**Feature completed:** opt-005 - Optimizer handles ammunition requirements
+
+**What was implemented:**
+- Added `weaponRequiresAmmo(weaponId)` function to check if a weapon needs ammunition
+  - Uses `ammoApplicability` from Equipment.ts to determine if weapon has valid ammo list
+  - Returns false for crystal bow, blowpipe, melee weapons, magic staves
+  - Returns true for bows, crossbows, ballistas
+- Added `isAmmoValidForWeapon(weaponId, ammoId)` to validate ammo/weapon compatibility
+  - Checks if specific ammo is in the weapon's valid ammo list
+- Added `filterValidAmmoForWeapon(weaponId, ammoCandidates)` to filter ammo items
+  - Returns only ammo items that are valid for the specified weapon
+- Added `findBestAmmoForWeapon(player, monster, ammoCandidates, constraints?)` function
+  - Finds the best ammo from valid options for the equipped weapon
+  - Uses existing DPS evaluation to compare ammo options
+  - Respects blacklist constraints
+- Updated `optimizeLoadout()` to handle ammunition:
+  - Removed 'ammo' from `SLOT_OPTIMIZATION_ORDER_NON_WEAPON`
+  - Added Step 2: Optimize ammunition after weapon selection
+  - For weapons that require ammo: filters to valid ammo and selects best
+  - For weapons that don't need ammo: leaves ammo slot null
+- Added comprehensive tests (23 new tests):
+  - Tests for `weaponRequiresAmmo` with bows, crossbows, crystal bow, melee
+  - Tests for `isAmmoValidForWeapon` with arrows/bolts combinations
+  - Tests for `filterValidAmmoForWeapon` filtering behavior
+  - Tests for `findBestAmmoForWeapon` selection and constraints
+  - Integration tests for `optimizeLoadout` with ranged/melee
+  - All 94 tests pass
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added ammo handling functions, updated optimizeLoadout)
+- `src/tests/lib/Optimizer.test.ts` (modified - added tests for opt-005)
+
+**Commit:** ec1cf9d1
+
+**Notes for next agent:**
+- The optimizer now handles ammo selection for ranged weapons
+- Ammo is optimized AFTER weapon selection to know which ammo types are valid
+- Weapons that don't need ammo (crystal bow, blowpipe) have ammo slot set to null
+- Barbed arrows (125 ranged str) are often selected as BiS due to high stats
+- Full optimization takes ~8 seconds due to ~4000 item evaluations at ~2ms each
+- Phase 1 core algorithm features are now complete
+
+**Next feature to work on:** filter-003 - Equipment can be filtered by budget (Phase 2)

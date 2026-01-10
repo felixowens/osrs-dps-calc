@@ -169,7 +169,7 @@
         "Ammo type matches weapon requirements (bolts for crossbows, arrows for bows)",
         "Best ammo for the weapon is selected"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
