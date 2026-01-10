@@ -411,7 +411,7 @@
         "DPS and other metrics are displayed",
         "Total cost is displayed"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
