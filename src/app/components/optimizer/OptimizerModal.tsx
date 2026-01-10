@@ -3,6 +3,9 @@ import { observer } from 'mobx-react-lite';
 import Modal from '@/app/components/generic/Modal';
 import { IconSparkles } from '@tabler/icons-react';
 import BudgetInput from '@/app/components/optimizer/BudgetInput';
+import CombatStyleSelector, { getCombatStyleFromType } from '@/app/components/optimizer/CombatStyleSelector';
+import { CombatStyle } from '@/types/Optimizer';
+import { useStore } from '@/state';
 
 interface OptimizerModalProps {
   isOpen: boolean;
@@ -10,8 +13,16 @@ interface OptimizerModalProps {
 }
 
 const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsOpen }) => {
+  const store = useStore();
+
+  // Derive default combat style from current player's equipped style
+  const defaultCombatStyle = getCombatStyleFromType(store.player.style.type);
+
   // Budget state: null = unlimited, number = specific budget in gp
   const [budget, setBudget] = useState<number | null>(null);
+
+  // Combat style state: defaults to current loadout style
+  const [combatStyle, setCombatStyle] = useState<CombatStyle>(defaultCombatStyle);
 
   return (
     <Modal
@@ -48,12 +59,16 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
 
         <div className="space-y-4">
           <div className="bg-dark-400 rounded p-3">
+            <CombatStyleSelector combatStyle={combatStyle} setCombatStyle={setCombatStyle} />
+          </div>
+
+          <div className="bg-dark-400 rounded p-3">
             <BudgetInput budget={budget} setBudget={setBudget} />
           </div>
 
           <div className="bg-dark-400 rounded p-3">
             <p className="text-gray-400 text-xs">
-              More settings coming soon: combat style, owned items, blacklist.
+              More settings coming soon: owned items, blacklist.
             </p>
           </div>
         </div>
