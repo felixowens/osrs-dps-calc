@@ -451,6 +451,19 @@
       "priority": "low"
     },
     {
+      "id": "ui-013",
+      "category": "ui",
+      "description": "User can see optimized gear with tooltips and link to item page",
+      "steps": [
+        "Each item in the optimized loadout has a tooltip with item name, stats, and price",
+        "Stats also include things like attack speed, attack range, etc.",
+        "Each item has a link to the item page in the GE database",
+        "Tooltips and links are visible on hover"
+      ],
+      "passes": false,
+      "priority": "high"
+    },
+    {
       "id": "int-001",
       "category": "integration",
       "description": "Optimizer uses current monster selection",
