@@ -451,3 +451,46 @@ This file tracks the progress of the gear optimizer implementation.
 - The `cost` field in `OptimizerResult` now returns actual values instead of stub 0s
 
 **Next feature to work on:** worker-001 - Optimizer runs in web worker (Phase 3)
+
+---
+
+## 2026-01-10 (continued)
+
+**Feature completed:** worker-001 - Optimizer runs in web worker
+
+**What was implemented:**
+- Added `OPTIMIZE` to `WorkerRequestType` enum in `src/worker/CalcWorkerTypes.ts`
+- Added `OptimizeRequest` interface with:
+  - `player`: Base player loadout to optimize from
+  - `monster`: Target monster to optimize against
+  - `combatStyle`: Optional combat style filter (melee/ranged/magic)
+  - `constraints`: Optional constraints (blacklist, budget, owned items)
+- Added `OptimizeResponse` interface returning `OptimizerResult`
+- Added request/response to union types for type safety
+- Extended `WORKER_JSON_REPLACER` and `WORKER_JSON_REVIVER` to handle Set serialization:
+  - Sets are converted to `{ _dataType: 'Set', s: [...] }` when serializing
+  - Reviver reconstructs Sets from this format
+- Added `optimize` handler function in `src/worker/worker.ts`:
+  - Deserializes constraints (converts arrays back to Sets as fallback)
+  - Calls `optimizeLoadout()` with the provided options
+  - Logs timing and evaluation count for debugging
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript type checking passes
+- All 444 existing tests pass
+
+**Files changed:**
+- `src/worker/CalcWorkerTypes.ts` (modified - added OPTIMIZE types and Set serialization)
+- `src/worker/worker.ts` (modified - added optimize handler and case)
+
+**Commit:** 35c65296
+
+**Notes for next agent:**
+- The worker integration is now complete - optimization runs in a separate thread
+- To use from main thread: send `WorkerRequestType.OPTIMIZE` message with player, monster, combatStyle, constraints
+- Sets in constraints (blacklistedItems, ownedItems) are serialized properly
+- The handler includes fallback array-to-Set conversion for robustness
+- UI integration (ui-001+) can now use the worker to run optimizations without blocking
+
+**Next feature to work on:** data-001 - Equipment items have price data available (or ui-001 to start UI)

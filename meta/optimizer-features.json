@@ -267,7 +267,7 @@
         "Uses existing worker architecture",
         "New OPTIMIZE request type is handled"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
