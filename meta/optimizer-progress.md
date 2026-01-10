@@ -750,3 +750,57 @@ This file tracks the progress of the gear optimizer implementation.
 - The TypeScript fixes for jest mocking are clean now and should not cause issues
 
 **Next feature to work on:** ui-006 - User can manage owned items (or other Phase 4 UI features)
+
+---
+
+## 2026-01-10 (ui-006)
+
+**Feature completed:** ui-006 - User can manage owned items
+
+**What was implemented:**
+- Created `OwnedItemsManager` component (`src/app/components/optimizer/OwnedItemsManager.tsx`):
+  - Searchable combobox to find equipment items using fuzzy search
+  - Add items to owned list by selecting from search results
+  - Display owned items in a scrollable list with item icons
+  - Remove button for each owned item
+  - "Clear all" button to remove all owned items at once
+  - Count display showing number of owned items
+- Added localStorage persistence via localforage:
+  - `loadOwnedItems()` - Load owned items Set from storage
+  - `saveOwnedItems(items)` - Save owned items Set to storage
+  - `clearOwnedItems()` - Clear owned items from storage
+  - Automatic load on component mount
+  - Automatic save when owned items change
+- Integrated OwnedItemsManager into OptimizerModal:
+  - Added ownedItems state (Set<number>)
+  - Placed below budget input section
+  - Updated placeholder text to only mention blacklist as "coming soon"
+
+**Also completed:** data-002 - User can mark items as owned
+- The ui-006 implementation includes all data-002 requirements:
+  - User can toggle ownership status on any equipment item (via search + add)
+  - Owned items are persisted to localStorage (via localforage)
+  - Owned items persist across page reloads (automatic load on mount)
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript type checking passes
+- All 173 Optimizer tests pass
+- Production build succeeds
+
+**Files changed:**
+- `src/app/components/optimizer/OwnedItemsManager.tsx` (new)
+- `src/app/components/optimizer/OptimizerModal.tsx` (modified)
+- `meta/optimizer-features.json` (modified - marked ui-006 and data-002 as passing)
+
+**Commit:** 64de124c
+
+**Notes for next agent:**
+- The OwnedItemsManager uses localforage for persistence (same as main app state)
+- Owned items state is currently local to the modal (useState) but loads from/saves to localStorage
+- The ownedItems Set will need to be passed to the optimizer constraints when implementing the Optimize button
+- The search uses the existing Combobox component with fuzzy search
+- Items are filtered to exclude those with no stats and broken/inactive versions
+- ui-007 (blacklist manager) can follow a very similar pattern to OwnedItemsManager
+
+**Next feature to work on:** ui-007 - User can manage blacklisted items
