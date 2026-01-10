@@ -327,7 +327,7 @@
         "Budget can be set to 'unlimited'",
         "Budget displays in appropriate format (k, m, b suffixes)"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {

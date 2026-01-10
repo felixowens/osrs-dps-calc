@@ -625,3 +625,43 @@ This file tracks the progress of the gear optimizer implementation.
 - Consider using the store (`useStore()`) in OptimizerModal to access player/monster data
 
 **Next feature to work on:** ui-003 - User can set a budget constraint
+
+---
+
+## 2026-01-10 (ui-003)
+
+**Feature completed:** ui-003 - User can set a budget constraint
+
+**What was implemented:**
+- Created `BudgetInput` component (`src/app/components/optimizer/BudgetInput.tsx`):
+  - Toggle for unlimited budget (defaults to unlimited)
+  - Text input that accepts k/m/b suffixes (e.g., "10m", "500k", "1b")
+  - `formatBudget()` helper to display numbers with appropriate suffix
+  - `parseBudget()` helper to parse user input to numbers
+  - Shows full GP amount next to input when budget is set
+  - Accessibility compliant with aria-label
+- Updated `OptimizerModal` to include the BudgetInput:
+  - Added budget state management (null = unlimited, number = specific budget)
+  - Budget input is displayed in a styled container within the modal
+
+**Verification:**
+- ESLint passes with no errors
+- Production build succeeds
+- All 173 Optimizer tests pass
+- Budget input accepts numeric values with k/m/b suffixes
+- Unlimited toggle works correctly
+
+**Files changed:**
+- `src/app/components/optimizer/BudgetInput.tsx` (new)
+- `src/app/components/optimizer/OptimizerModal.tsx` (modified)
+
+**Commit:** 999afd29
+
+**Notes for next agent:**
+- Budget state is currently local to the modal (useState)
+- The `formatBudget()` and `parseBudget()` functions are exported for potential reuse
+- Consider moving budget state to global store when implementing int-004 (optimizer state integration)
+- The budget value will need to be passed to the optimizer when implementing the "Optimize" button functionality
+- ui-004 (combat style selector) is the next logical step
+
+**Next feature to work on:** ui-004 - User can select combat style to optimize
