@@ -190,6 +190,50 @@ export function isItemWithinBudget(
 }
 
 // ============================================================================
+// Blacklist Filtering
+// ============================================================================
+
+/**
+ * Filter equipment by blacklist.
+ *
+ * Returns only items that are NOT in the blacklist.
+ *
+ * This function can be chained with other filters:
+ * - filterByBlacklist(blacklist, filterBySlot('weapon'))
+ * - filterByBudget(1000000, filterByBlacklist(blacklist, filterBySlot('weapon')))
+ *
+ * @param blacklist - Set of item IDs to exclude
+ * @param equipment - Optional array of equipment to filter. Defaults to all available equipment.
+ * @returns Array of equipment pieces not in the blacklist
+ *
+ * @example
+ * ```typescript
+ * // Exclude specific items from results
+ * const blacklist = new Set([4151, 26219]); // Whip, Rapier IDs
+ * const filtered = filterByBlacklist(blacklist);
+ *
+ * // Chain with slot filter
+ * const filteredWeapons = filterByBlacklist(blacklist, filterBySlot('weapon'));
+ *
+ * // Chain with multiple filters
+ * const weapons = filterBySlot('weapon');
+ * const meleeWeapons = filterByCombatStyle('melee', weapons);
+ * const allowedMeleeWeapons = filterByBlacklist(blacklist, meleeWeapons);
+ * ```
+ */
+export function filterByBlacklist(
+  blacklist: Set<number>,
+  equipment: EquipmentPiece[] = availableEquipment,
+): EquipmentPiece[] {
+  // If blacklist is empty, return all items (optimization)
+  if (blacklist.size === 0) {
+    return equipment;
+  }
+
+  return equipment.filter((item) => !blacklist.has(item.id));
+}
+
+// ============================================================================
 // Budget Filtering
 // ============================================================================
 

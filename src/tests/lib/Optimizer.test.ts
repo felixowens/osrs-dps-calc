@@ -10,6 +10,8 @@ import {
   setItemPrice, setItemPrices, setItemUntradeable, clearPriceStore,
   getItemPrice, getItemPriceInfo, getEffectivePrice, isItemWithinBudget,
   filterByBudget,
+  // Blacklist filtering
+  filterByBlacklist,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -1582,6 +1584,241 @@ describe('Optimizer', () => {
         expect(filtered).toContain(rapier); // Owned (free)
         expect(filtered).toContain(bronzeSword); // Cheap
         expect(filtered).not.toContain(abyssalWhip); // Not owned, over budget
+      });
+    });
+  });
+
+  describe('Blacklist filtering (filter-004)', () => {
+    // Test items
+    const abyssalWhip = findEquipment('Abyssal whip');
+    const rapier = findEquipment('Ghrazi rapier');
+    const torvaHelm = findEquipment('Torva full helm');
+    const bronzeSword = findEquipment('Bronze sword');
+    const dragonDefender = findEquipment('Dragon defender');
+
+    describe('filterByBlacklist', () => {
+      test('excludes blacklisted items from results', () => {
+        const blacklist = new Set([abyssalWhip.id, rapier.id]);
+        const testItems = [abyssalWhip, rapier, bronzeSword, torvaHelm];
+
+        const filtered = filterByBlacklist(blacklist, testItems);
+
+        expect(filtered).not.toContain(abyssalWhip);
+        expect(filtered).not.toContain(rapier);
+        expect(filtered).toContain(bronzeSword);
+        expect(filtered).toContain(torvaHelm);
+      });
+
+      test('empty blacklist returns all items', () => {
+        const blacklist = new Set<number>();
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+
+        const filtered = filterByBlacklist(blacklist, testItems);
+
+        expect(filtered.length).toBe(testItems.length);
+        expect(filtered).toContain(abyssalWhip);
+        expect(filtered).toContain(rapier);
+        expect(filtered).toContain(bronzeSword);
+      });
+
+      test('blacklist with all items returns empty array', () => {
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const blacklist = new Set([abyssalWhip.id, rapier.id, bronzeSword.id]);
+
+        const filtered = filterByBlacklist(blacklist, testItems);
+
+        expect(filtered.length).toBe(0);
+      });
+
+      test('blacklist with non-existent IDs has no effect', () => {
+        const blacklist = new Set([99999, 88888]); // IDs that don't exist
+        const testItems = [abyssalWhip, rapier];
+
+        const filtered = filterByBlacklist(blacklist, testItems);
+
+        expect(filtered.length).toBe(testItems.length);
+        expect(filtered).toContain(abyssalWhip);
+        expect(filtered).toContain(rapier);
+      });
+
+      test('uses all available equipment when no equipment array is provided', () => {
+        const blacklist = new Set([abyssalWhip.id]);
+
+        const filtered = filterByBlacklist(blacklist);
+
+        // Should have most items (minus the blacklisted one)
+        expect(filtered.length).toBe(availableEquipment.length - 1);
+        expect(filtered).not.toContain(abyssalWhip);
+      });
+
+      test('single item blacklist works correctly', () => {
+        const blacklist = new Set([rapier.id]);
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+
+        const filtered = filterByBlacklist(blacklist, testItems);
+
+        expect(filtered.length).toBe(2);
+        expect(filtered).toContain(abyssalWhip);
+        expect(filtered).not.toContain(rapier);
+        expect(filtered).toContain(bronzeSword);
+      });
+    });
+
+    describe('chaining with other filters', () => {
+      test('chains with filterBySlot', () => {
+        const blacklist = new Set([abyssalWhip.id, rapier.id]);
+
+        const weapons = filterBySlot('weapon');
+        const filteredWeapons = filterByBlacklist(blacklist, weapons);
+
+        // All results should be weapons
+        expect(filteredWeapons.every((item) => item.slot === 'weapon')).toBe(true);
+
+        // Blacklisted weapons should not be present
+        expect(filteredWeapons).not.toContain(abyssalWhip);
+        expect(filteredWeapons).not.toContain(rapier);
+
+        // Non-blacklisted weapons should be present
+        expect(filteredWeapons).toContain(bronzeSword);
+      });
+
+      test('chains with filterByCombatStyle', () => {
+        const blacklist = new Set([abyssalWhip.id]);
+
+        const meleeItems = filterByCombatStyle('melee');
+        const filteredMelee = filterByBlacklist(blacklist, meleeItems);
+
+        // Whip is melee but blacklisted
+        expect(filteredMelee).not.toContain(abyssalWhip);
+
+        // Rapier is melee and not blacklisted
+        expect(filteredMelee).toContain(rapier);
+      });
+
+      test('chains with filterByBudget', () => {
+        // Clear and set prices
+        clearPriceStore();
+        setItemPrice(abyssalWhip.id, 2_500_000);
+        setItemPrice(rapier.id, 140_000_000);
+        setItemPrice(bronzeSword.id, 100);
+
+        const blacklist = new Set([bronzeSword.id]);
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+
+        // Filter by budget first, then by blacklist
+        const affordable = filterByBudget(5_000_000, testItems);
+        const filteredAffordable = filterByBlacklist(blacklist, affordable);
+
+        // Whip is affordable and not blacklisted
+        expect(filteredAffordable).toContain(abyssalWhip);
+
+        // Bronze sword is affordable but blacklisted
+        expect(filteredAffordable).not.toContain(bronzeSword);
+
+        // Rapier is over budget (filtered by budget)
+        expect(filteredAffordable).not.toContain(rapier);
+
+        // Clean up
+        clearPriceStore();
+      });
+
+      test('multiple filters in sequence work correctly', () => {
+        const blacklist = new Set([abyssalWhip.id]);
+
+        // Chain: slot -> combat style -> blacklist
+        const weapons = filterBySlot('weapon');
+        const meleeWeapons = filterByCombatStyle('melee', weapons);
+        const filteredMeleeWeapons = filterByBlacklist(blacklist, meleeWeapons);
+
+        // All should be weapons
+        expect(filteredMeleeWeapons.every((item) => item.slot === 'weapon')).toBe(true);
+
+        // All should have melee bonuses (or be neutral)
+        const hasMeleeOrNeutral = filteredMeleeWeapons.every((item) => {
+          const hasMelee = item.offensive.stab > 0
+            || item.offensive.slash > 0
+            || item.offensive.crush > 0
+            || item.bonuses.str > 0;
+          const isNeutral = !item.offensive.ranged && !item.offensive.magic
+            && !item.bonuses.ranged_str && !item.bonuses.magic_str;
+          return hasMelee || isNeutral;
+        });
+        expect(hasMeleeOrNeutral).toBe(true);
+
+        // Blacklisted item not present
+        expect(filteredMeleeWeapons).not.toContain(abyssalWhip);
+      });
+    });
+
+    describe('edge cases', () => {
+      test('empty equipment array returns empty array', () => {
+        const blacklist = new Set([abyssalWhip.id]);
+        const filtered = filterByBlacklist(blacklist, []);
+
+        expect(filtered.length).toBe(0);
+      });
+
+      test('filtering different slot items is correct', () => {
+        const blacklist = new Set([torvaHelm.id, dragonDefender.id]);
+        const testItems = [torvaHelm, dragonDefender, abyssalWhip, rapier];
+
+        const filtered = filterByBlacklist(blacklist, testItems);
+
+        expect(filtered.length).toBe(2);
+        expect(filtered).toContain(abyssalWhip);
+        expect(filtered).toContain(rapier);
+        expect(filtered).not.toContain(torvaHelm);
+        expect(filtered).not.toContain(dragonDefender);
+      });
+
+      test('preserves original item references', () => {
+        const blacklist = new Set([rapier.id]);
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+
+        const filtered = filterByBlacklist(blacklist, testItems);
+
+        // Original items should be the same objects
+        expect(filtered[0]).toBe(abyssalWhip);
+        expect(filtered[1]).toBe(bronzeSword);
+      });
+
+      test('original array is not modified', () => {
+        const blacklist = new Set([abyssalWhip.id]);
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const originalLength = testItems.length;
+
+        filterByBlacklist(blacklist, testItems);
+
+        // Original array should not be modified
+        expect(testItems.length).toBe(originalLength);
+        expect(testItems).toContain(abyssalWhip);
+      });
+    });
+
+    describe('integration with findBestItemForSlot', () => {
+      test('blacklist filtering works the same via constraints and filterByBlacklist', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        const blacklist = new Set([rapier.id]);
+        const weapons = [abyssalWhip, rapier, bronzeSword];
+
+        // Method 1: Use filterByBlacklist before findBestItemForSlot
+        const filteredWeapons = filterByBlacklist(blacklist, weapons);
+        const result1 = findBestItemForSlot('weapon', player, monster, filteredWeapons);
+
+        // Method 2: Use constraints in findBestItemForSlot
+        const result2 = findBestItemForSlot('weapon', player, monster, weapons, {
+          blacklistedItems: blacklist,
+        });
+
+        // Both methods should produce the same result
+        expect(result1.candidates.length).toBe(result2.candidates.length);
+        expect(result1.bestItem?.id).toBe(result2.bestItem?.id);
+
+        // Neither should contain the blacklisted item
+        expect(result1.candidates.some((c) => c.item.id === rapier.id)).toBe(false);
+        expect(result2.candidates.some((c) => c.item.id === rapier.id)).toBe(false);
       });
     });
   });
