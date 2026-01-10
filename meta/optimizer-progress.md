@@ -988,7 +988,7 @@ This file tracks the progress of the gear optimizer implementation.
 - `src/app/components/optimizer/OptimizerResults.tsx` (modified)
 - `meta/optimizer-features.json` (modified - marked ui-013 tooltips as passing)
 
-**Commit:** [pending]
+**Commit:** 158ad188
 
 **Notes for next agent:**
 - The tooltip is clickable so users can interact with the "View on Wiki" link
