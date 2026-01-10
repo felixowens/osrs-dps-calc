@@ -543,3 +543,42 @@ This file tracks the progress of the gear optimizer implementation.
 - Integration with UI (ui-001+) should call fetchAndLoadPrices on app load or on demand
 
 **Next feature to work on:** ui-001 - Optimizer can be launched from the UI (Phase 4)
+
+---
+
+## 2026-01-10 (ui-001)
+
+**Feature completed:** ui-001 - Optimizer can be launched from the UI
+
+**What was implemented:**
+- Created dedicated optimizer page at `/optimizer` (`src/app/optimizer/page.tsx`)
+  - Uses the existing app layout (TopBar, Footer, ClientProviders)
+  - Shows feature overview with upcoming functionality list
+  - Includes "Back to Calculator" link for easy navigation
+  - Styled consistently with the rest of the application (dark theme)
+- Added sparkles icon button in PlayerContainer header (`src/app/components/player/PlayerContainer.tsx`)
+  - Positioned next to WikiSync and delete buttons
+  - Uses IconSparkles from tabler-icons-react
+  - Tooltip says "Optimize gear"
+  - Navigates to /optimizer page using Next.js Link
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript build succeeds
+- All 462 tests pass
+- New /optimizer route visible in build output
+
+**Files changed:**
+- `src/app/optimizer/page.tsx` (new)
+- `src/app/components/player/PlayerContainer.tsx` (modified - added Link and IconSparkles)
+
+**Commit:** f04102bd
+
+**Notes for next agent:**
+- The optimizer page is currently a placeholder with feature overview
+- It has access to the global store via ClientProviders (StoreProvider, CalcProvider)
+- Future UI features (ui-002+) should add forms and functionality to this page
+- The page can access player loadouts and monster data from the store
+- Consider adding useEffect to call fetchAndLoadPrices() when page loads
+
+**Next feature to work on:** ui-002 - Optimizer settings (or continue with other UI features)

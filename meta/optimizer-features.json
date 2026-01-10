@@ -303,7 +303,7 @@
         "Button is accessible from the main calculator view",
         "Button clearly indicates its purpose"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
