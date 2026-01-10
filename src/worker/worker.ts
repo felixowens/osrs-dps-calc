@@ -13,7 +13,7 @@ import { NPCVsPlayerCalculatedLoadout, PlayerVsNPCCalculatedLoadout } from '@/ty
 import NPCVsPlayerCalc from '@/lib/NPCVsPlayerCalc';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 import Comparator from '@/lib/Comparator';
-import { optimizeLoadout } from '@/lib/Optimizer';
+import { optimizeLoadout, arePricesLoaded, fetchAndLoadPrices } from '@/lib/Optimizer';
 import { OptimizerConstraints } from '@/types/Optimizer';
 import { ttkDist } from '@/worker/ttkWorker';
 import { range } from 'd3-array';
@@ -119,6 +119,18 @@ const optimize: Handler<WorkerRequestType.OPTIMIZE> = async (data) => {
   const {
     player, monster, combatStyle, constraints: rawConstraints,
   } = data;
+
+  // Load prices if not already loaded (first optimization run)
+  if (!arePricesLoaded()) {
+    console.debug('Loading prices from OSRS Wiki API...');
+    const priceResult = await fetchAndLoadPrices();
+    if (priceResult.success) {
+      console.debug(`Loaded ${priceResult.itemCount} item prices`);
+    } else {
+      console.warn(`Failed to load prices: ${priceResult.error}`);
+      // Continue without prices - items will be treated as free
+    }
+  }
 
   // Convert array-serialized constraints back to Sets
   // (Sets cannot be serialized to JSON, so they come through as arrays)

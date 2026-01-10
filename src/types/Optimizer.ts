@@ -93,8 +93,16 @@ export interface OptimizerResult {
 
   /** Cost breakdown */
   cost: {
+    /** Net cost after deducting owned items (what you need to spend) */
     total: number;
+    /** Full cost before owned items deduction (total market value) */
+    fullTotal: number;
+    /** Amount saved from owned items */
+    ownedSavings: number;
+    /** Per-slot cost (net cost, 0 for owned items) */
     perSlot: Partial<Record<EquipmentSlot, number>>;
+    /** Per-slot full price (market value, even for owned items) */
+    perSlotFull: Partial<Record<EquipmentSlot, number>>;
   };
 
   /** Search metadata */

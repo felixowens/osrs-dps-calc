@@ -357,34 +357,65 @@ export function isItemWithinBudget(
 // ============================================================================
 
 /**
+ * Cost breakdown returned by calculateLoadoutCost
+ */
+export interface LoadoutCostBreakdown {
+  /** Net cost after deducting owned items (what you need to spend) */
+  total: number;
+  /** Full cost before owned items deduction (total market value) */
+  fullTotal: number;
+  /** Amount saved from owned items */
+  ownedSavings: number;
+  /** Per-slot cost (net cost, 0 for owned items) */
+  perSlot: Partial<Record<EquipmentSlot, number>>;
+  /** Per-slot full price (market value, even for owned items) */
+  perSlotFull: Partial<Record<EquipmentSlot, number>>;
+}
+
+/**
  * Calculate the total cost of a loadout.
  *
- * Sums up the effective price of all equipped items. Owned items contribute 0 to cost.
+ * Sums up the effective price of all equipped items. Owned items contribute 0 to net cost
+ * but are still tracked in fullTotal for the cost breakdown display.
  * Items with unknown prices are treated as 0 cost (to avoid blocking optimization).
  *
  * @param equipment - The equipment loadout to calculate cost for
  * @param ownedItems - Optional set of owned item IDs (owned items are free)
- * @returns Object with total cost and per-slot cost breakdown
+ * @returns Object with total cost, full total, owned savings, and per-slot breakdowns
  */
 export function calculateLoadoutCost(
   equipment: PlayerEquipment,
   ownedItems?: Set<number>,
-): { total: number; perSlot: Partial<Record<EquipmentSlot, number>> } {
+): LoadoutCostBreakdown {
   let total = 0;
+  let fullTotal = 0;
+  let ownedSavings = 0;
   const perSlot: Partial<Record<EquipmentSlot, number>> = {};
+  const perSlotFull: Partial<Record<EquipmentSlot, number>> = {};
 
   for (const slot of EQUIPMENT_SLOTS) {
     const item = equipment[slot];
     if (item) {
-      const price = getEffectivePrice(item.id, ownedItems);
-      // Treat unknown prices as 0 to avoid blocking
-      const cost = price ?? 0;
-      perSlot[slot] = cost;
-      total += cost;
+      // Get the market price (ignoring ownership)
+      const marketPrice = getItemPrice(item.id) ?? 0;
+      // Get the effective price (0 if owned)
+      const effectivePrice = getEffectivePrice(item.id, ownedItems) ?? 0;
+
+      perSlotFull[slot] = marketPrice;
+      perSlot[slot] = effectivePrice;
+      fullTotal += marketPrice;
+      total += effectivePrice;
+
+      // Track savings from owned items
+      if (ownedItems?.has(item.id) && marketPrice > 0) {
+        ownedSavings += marketPrice;
+      }
     }
   }
 
-  return { total, perSlot };
+  return {
+    total, fullTotal, ownedSavings, perSlot, perSlotFull,
+  };
 }
 
 // ============================================================================
@@ -1126,7 +1157,7 @@ function applyBudgetConstraint(
   budget: number,
   candidatesBySlot: Record<EquipmentSlot, EquipmentPiece[]>,
   constraints?: OptimizerConstraints,
-): { equipment: PlayerEquipment; cost: { total: number; perSlot: Partial<Record<EquipmentSlot, number>> } } {
+): { equipment: PlayerEquipment; cost: LoadoutCostBreakdown } {
   // Create a mutable copy of the equipment
   const adjustedEquipment: PlayerEquipment = { ...equipment };
 

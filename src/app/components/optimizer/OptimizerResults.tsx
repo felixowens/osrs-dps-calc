@@ -151,14 +151,37 @@ const OptimizerResults: React.FC<OptimizerResultsProps> = ({ result }) => {
       {/* Cost Summary */}
       <div className="bg-dark-500 rounded p-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-300">Total Cost</span>
+          <span className="text-sm text-gray-300">Cost to Buy</span>
           <span className="text-lg font-bold text-yellow-400">
             {cost.total > 0 ? formatBudget(cost.total) : 'Free'}
           </span>
         </div>
-        {cost.total > 0 && (
+
+        {/* Cost breakdown when there are owned items */}
+        {cost.ownedSavings > 0 && (
+          <div className="text-xs text-gray-400 mt-2 font-mono">
+            {formatBudget(cost.fullTotal)}
+            {' '}
+            -
+            {' '}
+            <span className="text-green-400">
+              {formatBudget(cost.ownedSavings)}
+              {' '}
+              (owned)
+            </span>
+            {' '}
+            =
+            {' '}
+            <span className="text-yellow-400">{formatBudget(cost.total)}</span>
+          </div>
+        )}
+
+        {/* Full cost details */}
+        {cost.fullTotal > 0 && (
           <div className="text-xs text-gray-500 mt-1">
-            {cost.total.toLocaleString()}
+            Total gear value:
+            {' '}
+            {cost.fullTotal.toLocaleString()}
             {' '}
             gp
           </div>
