@@ -508,7 +508,7 @@
         "Settings persist across modal open/close",
         "Results can update main loadout state"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {

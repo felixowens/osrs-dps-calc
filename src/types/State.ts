@@ -3,6 +3,7 @@ import { Player } from '@/types/Player';
 import { Monster } from '@/types/Monster';
 import UserIssueType from '@/enums/UserIssueType';
 import { DetailEntry } from '@/lib/CalcDetails';
+import { CombatStyle, OptimizationObjective } from '@/types/Optimizer';
 
 export interface UserIssue {
   type: UserIssueType;
@@ -34,6 +35,23 @@ export interface Preferences {
   hitDistsHideZeros: boolean; // legacy name
   hitDistShowSpec: boolean;
   resultsExpanded: boolean;
+}
+
+/**
+ * Optimizer settings that persist across modal opens/closes and page reloads.
+ * Stored in localStorage separate from preferences.
+ */
+export interface OptimizerSettings {
+  /** Combat style to optimize for (melee/ranged/magic) */
+  combatStyle: CombatStyle;
+  /** Optimization objective (dps/accuracy/max_hit) */
+  objective: OptimizationObjective;
+  /** Maximum budget in GP, null means unlimited */
+  budget: number | null;
+  /** Item IDs the user owns (considered free) */
+  ownedItems: number[];
+  /** Item IDs to exclude from optimization */
+  blacklistedItems: number[];
 }
 
 export interface ChartEntry {
@@ -123,6 +141,7 @@ export interface State extends ImportableData {
   ui: UI;
   prefs: Preferences;
   calc: Calculator;
+  optimizerSettings: OptimizerSettings;
 
   /**
    * All monsters that a player can fight.

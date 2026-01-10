@@ -5,7 +5,7 @@ import Modal from '@/app/components/generic/Modal';
 import { IconSparkles, IconLoader2 } from '@tabler/icons-react';
 import BlacklistManager from '@/app/components/optimizer/BlacklistManager';
 import BudgetInput from '@/app/components/optimizer/BudgetInput';
-import CombatStyleSelector, { getCombatStyleFromType } from '@/app/components/optimizer/CombatStyleSelector';
+import CombatStyleSelector from '@/app/components/optimizer/CombatStyleSelector';
 import ObjectiveSelector from '@/app/components/optimizer/ObjectiveSelector';
 import OwnedItemsManager from '@/app/components/optimizer/OwnedItemsManager';
 import OptimizerResults, { ComparisonData } from '@/app/components/optimizer/OptimizerResults';
@@ -25,22 +25,28 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
   const store = useStore();
   const calc = useCalc();
 
-  // Derive default combat style from current player's equipped style
-  const defaultCombatStyle = getCombatStyleFromType(store.player.style.type);
+  // Get settings from global store (persists across modal open/close)
+  const { combatStyle, objective, budget } = store.optimizerSettings;
 
-  // Budget state: null = unlimited, number = specific budget in gp
-  const [budget, setBudget] = useState<number | null>(null);
+  // Callbacks to update settings in the store
+  const setCombatStyle = useCallback((style: CombatStyle) => {
+    store.updateOptimizerSettings({ combatStyle: style });
+  }, [store]);
 
-  // Combat style state: defaults to current loadout style
-  const [combatStyle, setCombatStyle] = useState<CombatStyle>(defaultCombatStyle);
+  const setObjective = useCallback((obj: OptimizationObjective) => {
+    store.updateOptimizerSettings({ objective: obj });
+  }, [store]);
 
-  // Optimization objective state: defaults to DPS
-  const [objective, setObjective] = useState<OptimizationObjective>('dps');
+  const setBudget = useCallback((b: number | null) => {
+    store.updateOptimizerSettings({ budget: b });
+  }, [store]);
 
   // Owned items state: Set of item IDs the user owns
+  // (uses component-level state + localStorage for persistence)
   const [ownedItems, setOwnedItems] = useState<Set<number>>(new Set());
 
   // Blacklisted items state: Set of item IDs to exclude from optimization
+  // (uses component-level state + localStorage for persistence)
   const [blacklistedItems, setBlacklistedItems] = useState<Set<number>>(new Set());
 
   // Optimization result state

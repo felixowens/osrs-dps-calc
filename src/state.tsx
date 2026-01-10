@@ -11,6 +11,7 @@ import {
   Calculator,
   IMPORT_VERSION,
   ImportableData,
+  OptimizerSettings,
   PlayerVsNPCCalculatedLoadout,
   Preferences,
   State,
@@ -53,6 +54,17 @@ import Potion from './enums/Potion';
 import { startPollingForRuneLite, WikiSyncer } from './wikisync/WikiSyncer';
 
 const EMPTY_CALC_LOADOUT = {} as CalculatedLoadout;
+
+/**
+ * Default optimizer settings used when user hasn't configured any.
+ */
+const DEFAULT_OPTIMIZER_SETTINGS: OptimizerSettings = {
+  combatStyle: 'melee',
+  objective: 'dps',
+  budget: null,
+  ownedItems: [],
+  blacklistedItems: [],
+};
 
 const generateInitialEquipment = () => {
   const initialEquipment: PlayerEquipment = {
@@ -234,6 +246,8 @@ class GlobalState implements State {
     hitDistShowSpec: false,
     resultsExpanded: false,
   };
+
+  optimizerSettings: OptimizerSettings = { ...DEFAULT_OPTIMIZER_SETTINGS };
 
   calc: Calculator = {
     loadouts: [
@@ -599,6 +613,46 @@ class GlobalState implements State {
       // TODO something that isn't this
       // eslint-disable-next-line no-alert
       alert('Could not persist preferences to browser. Make sure our site has permission to do this.');
+    });
+  }
+
+  /**
+   * Load optimizer settings from localStorage.
+   */
+  loadOptimizerSettings() {
+    localforage.getItem('dps-calc-optimizer').then((v) => {
+      if (v) {
+        this.updateOptimizerSettings(v as PartialDeep<OptimizerSettings>, false);
+      }
+    }).catch((e) => {
+      console.error('[GlobalState] Failed to load optimizer settings:', e);
+    });
+  }
+
+  /**
+   * Update optimizer settings.
+   * @param settings - Partial settings to merge
+   * @param persist - Whether to save to localStorage (default: true)
+   */
+  updateOptimizerSettings(settings: PartialDeep<OptimizerSettings>, persist: boolean = true) {
+    // Update local state store
+    this.optimizerSettings = Object.assign(this.optimizerSettings, settings);
+
+    // Save to browser storage
+    if (persist) {
+      localforage.setItem('dps-calc-optimizer', toJS(this.optimizerSettings)).catch((e) => {
+        console.error('[GlobalState] Failed to save optimizer settings:', e);
+      });
+    }
+  }
+
+  /**
+   * Reset optimizer settings to defaults.
+   */
+  resetOptimizerSettings() {
+    this.optimizerSettings = { ...DEFAULT_OPTIMIZER_SETTINGS };
+    localforage.setItem('dps-calc-optimizer', toJS(this.optimizerSettings)).catch((e) => {
+      console.error('[GlobalState] Failed to save optimizer settings:', e);
     });
   }
 

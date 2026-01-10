@@ -62,6 +62,9 @@ const Home: NextPage = observer(() => {
     // Load preferences from browser storage if there are any
     store.loadPreferences();
 
+    // Load optimizer settings from browser storage
+    store.loadOptimizerSettings();
+
     // Setup global event handling
     document.addEventListener('keydown', globalKeyDownHandler);
 

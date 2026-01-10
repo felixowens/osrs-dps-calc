@@ -1,15 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { Tooltip } from 'react-tooltip';
 import { ToastContainer } from 'react-toastify';
 import { IconArrowLeft, IconSparkles } from '@tabler/icons-react';
 import Link from 'next/link';
 import OptimizerModal from '@/app/components/optimizer/OptimizerModal';
+import { useStore } from '@/state';
 
 const OptimizerPage: React.FC = observer(() => {
+  const store = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Load optimizer settings on mount (in case user navigates directly to this page)
+  useEffect(() => {
+    store.loadOptimizerSettings();
+  }, [store]);
 
   return (
     <div className="max-w-[800px] mx-auto mt-4 md:mb-8 px-4">
