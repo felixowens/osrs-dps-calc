@@ -4,8 +4,9 @@ import { useStore } from '@/state';
 import { calculateCombatLevel } from '@/utils';
 import PlayerInnerContainer from '@/app/components/player/PlayerInnerContainer';
 import LoadoutName from '@/app/components/player/LoadoutName';
-import { IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconPlus, IconSparkles, IconTrash } from '@tabler/icons-react';
 import WikiSyncButton from 'src/app/components/player/WikiSyncButton';
+import Link from 'next/link';
 
 const PlayerContainer: React.FC = observer(() => {
   const store = useStore();
@@ -61,6 +62,14 @@ const PlayerContainer: React.FC = observer(() => {
             </div>
           </div>
           <div className="flex gap-1">
+            <Link
+              href="/optimizer"
+              className="text-body-500 dark:text-dark-100 hover:text-yellow-400 transition-colors"
+              data-tooltip-id="tooltip"
+              data-tooltip-content="Optimize gear"
+            >
+              <IconSparkles aria-label="Optimize gear" />
+            </Link>
             <WikiSyncButton />
             <button
               type="button"
