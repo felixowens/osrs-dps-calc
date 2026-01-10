@@ -18,10 +18,28 @@ import hands from '@/public/img/slots/hands.png';
 import feet from '@/public/img/slots/feet.png';
 import ring from '@/public/img/slots/ring.png';
 
+/**
+ * Comparison data for showing differences from current loadout.
+ */
+export interface ComparisonData {
+  /** Current loadout's DPS */
+  currentDps: number;
+  /** Current loadout's accuracy (0-1) */
+  currentAccuracy: number;
+  /** Current loadout's max hit */
+  currentMaxHit: number;
+  /** Current loadout's total cost */
+  currentCost: number;
+  /** Current loadout's equipment */
+  currentEquipment: PlayerEquipment;
+}
+
 interface OptimizerResultsProps {
   result: OptimizerResult;
   onApply?: () => void;
   loadoutName?: string;
+  /** Optional comparison data to show differences from current loadout */
+  comparison?: ComparisonData;
 }
 
 /**
@@ -48,9 +66,17 @@ const ResultSlot: React.FC<{
   slot: EquipmentSlot;
   equipment: PlayerEquipment;
   cost?: number;
-}> = ({ slot, equipment, cost }) => {
+  isChanged?: boolean;
+}> = ({
+  slot, equipment, cost, isChanged,
+}) => {
   const item = equipment[slot];
   const placeholder = SLOT_PLACEHOLDERS[slot];
+
+  // Determine border color based on whether item changed
+  const borderClass = isChanged
+    ? 'border-2 border-green-500'
+    : 'border border-dark-300';
 
   // If there's an item, make it clickable and use the item tooltip
   if (item) {
@@ -60,7 +86,7 @@ const ResultSlot: React.FC<{
           href={getWikiUrl(item.id)}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex justify-center items-center h-[40px] w-[40px] bg-dark-400 border border-dark-300 rounded cursor-pointer hover:border-blue-400 transition-colors"
+          className={`flex justify-center items-center h-[40px] w-[40px] bg-dark-400 ${borderClass} rounded cursor-pointer hover:border-blue-400 transition-colors`}
           data-tooltip-id="item-tooltip"
           data-item-id={item.id}
         >
@@ -77,7 +103,7 @@ const ResultSlot: React.FC<{
   return (
     <div className="flex flex-col items-center">
       <div
-        className="flex justify-center items-center h-[40px] w-[40px] bg-dark-400 border border-dark-300 rounded"
+        className={`flex justify-center items-center h-[40px] w-[40px] bg-dark-400 ${borderClass} rounded`}
         data-tooltip-id="tooltip"
         data-tooltip-content={`Empty ${slot}`}
       >
@@ -102,33 +128,57 @@ function getItemFromEquipment(equipment: PlayerEquipment, itemId: number): Equip
 }
 
 /**
+ * Check if an item in a slot has changed between two equipment sets.
+ */
+function hasSlotChanged(
+  slot: EquipmentSlot,
+  optimized: PlayerEquipment,
+  current?: PlayerEquipment,
+): boolean {
+  if (!current) return false;
+
+  const optimizedItem = optimized[slot];
+  const currentItem = current[slot];
+
+  // Both empty - no change
+  if (!optimizedItem && !currentItem) return false;
+
+  // One is empty, other is not - changed
+  if (!optimizedItem || !currentItem) return true;
+
+  // Both have items - compare IDs
+  return optimizedItem.id !== currentItem.id;
+}
+
+/**
  * Display the optimized equipment in a grid similar to the main equipment grid
  */
 const ResultsEquipmentGrid: React.FC<{
   equipment: PlayerEquipment;
   perSlotCost: Partial<Record<EquipmentSlot, number>>;
-}> = ({ equipment, perSlotCost }) => (
+  currentEquipment?: PlayerEquipment;
+}> = ({ equipment, perSlotCost, currentEquipment }) => (
   <div className="flex flex-col items-center">
     <div className="flex justify-center">
-      <ResultSlot slot="head" equipment={equipment} cost={perSlotCost.head} />
+      <ResultSlot slot="head" equipment={equipment} cost={perSlotCost.head} isChanged={hasSlotChanged('head', equipment, currentEquipment)} />
     </div>
     <div className="mt-1 flex justify-center gap-2">
-      <ResultSlot slot="cape" equipment={equipment} cost={perSlotCost.cape} />
-      <ResultSlot slot="neck" equipment={equipment} cost={perSlotCost.neck} />
-      <ResultSlot slot="ammo" equipment={equipment} cost={perSlotCost.ammo} />
+      <ResultSlot slot="cape" equipment={equipment} cost={perSlotCost.cape} isChanged={hasSlotChanged('cape', equipment, currentEquipment)} />
+      <ResultSlot slot="neck" equipment={equipment} cost={perSlotCost.neck} isChanged={hasSlotChanged('neck', equipment, currentEquipment)} />
+      <ResultSlot slot="ammo" equipment={equipment} cost={perSlotCost.ammo} isChanged={hasSlotChanged('ammo', equipment, currentEquipment)} />
     </div>
     <div className="mt-1 flex justify-center gap-6">
-      <ResultSlot slot="weapon" equipment={equipment} cost={perSlotCost.weapon} />
-      <ResultSlot slot="body" equipment={equipment} cost={perSlotCost.body} />
-      <ResultSlot slot="shield" equipment={equipment} cost={perSlotCost.shield} />
+      <ResultSlot slot="weapon" equipment={equipment} cost={perSlotCost.weapon} isChanged={hasSlotChanged('weapon', equipment, currentEquipment)} />
+      <ResultSlot slot="body" equipment={equipment} cost={perSlotCost.body} isChanged={hasSlotChanged('body', equipment, currentEquipment)} />
+      <ResultSlot slot="shield" equipment={equipment} cost={perSlotCost.shield} isChanged={hasSlotChanged('shield', equipment, currentEquipment)} />
     </div>
     <div className="mt-1 flex justify-center">
-      <ResultSlot slot="legs" equipment={equipment} cost={perSlotCost.legs} />
+      <ResultSlot slot="legs" equipment={equipment} cost={perSlotCost.legs} isChanged={hasSlotChanged('legs', equipment, currentEquipment)} />
     </div>
     <div className="mt-1 flex justify-center gap-6">
-      <ResultSlot slot="hands" equipment={equipment} cost={perSlotCost.hands} />
-      <ResultSlot slot="feet" equipment={equipment} cost={perSlotCost.feet} />
-      <ResultSlot slot="ring" equipment={equipment} cost={perSlotCost.ring} />
+      <ResultSlot slot="hands" equipment={equipment} cost={perSlotCost.hands} isChanged={hasSlotChanged('hands', equipment, currentEquipment)} />
+      <ResultSlot slot="feet" equipment={equipment} cost={perSlotCost.feet} isChanged={hasSlotChanged('feet', equipment, currentEquipment)} />
+      <ResultSlot slot="ring" equipment={equipment} cost={perSlotCost.ring} isChanged={hasSlotChanged('ring', equipment, currentEquipment)} />
     </div>
   </div>
 );
@@ -150,10 +200,56 @@ function formatAccuracy(accuracy: number): string {
   return `${(accuracy * 100).toFixed(1)}%`;
 }
 
-const OptimizerResults: React.FC<OptimizerResultsProps> = ({ result, onApply, loadoutName }) => {
+/**
+ * Format a numeric difference with sign and color.
+ */
+interface DifferenceDisplayProps {
+  value: number;
+  format?: (v: number) => string;
+  suffix?: string;
+  showPercent?: boolean;
+  baseValue?: number;
+}
+
+const DifferenceDisplay: React.FC<DifferenceDisplayProps> = ({
+  value, format, suffix = '', showPercent, baseValue,
+}) => {
+  if (value === 0) return null;
+
+  const isPositive = value > 0;
+  const sign = isPositive ? '+' : '';
+  const colorClass = isPositive ? 'text-green-400' : 'text-red-400';
+  const formatted = format ? format(Math.abs(value)) : Math.abs(value).toString();
+
+  // Calculate percentage change if requested
+  let percentStr = '';
+  if (showPercent && baseValue && baseValue !== 0) {
+    const percentChange = (value / baseValue) * 100;
+    percentStr = ` (${isPositive ? '+' : ''}${percentChange.toFixed(1)}%)`;
+  }
+
+  return (
+    <span className={`text-xs ${colorClass} ml-1`}>
+      {sign}
+      {formatted}
+      {suffix}
+      {percentStr}
+    </span>
+  );
+};
+
+const OptimizerResults: React.FC<OptimizerResultsProps> = ({
+  result, onApply, loadoutName, comparison,
+}) => {
   const {
     equipment, metrics, cost, meta,
   } = result;
+
+  // Calculate differences if comparison data is available
+  const dpsDiff = comparison ? metrics.dps - comparison.currentDps : 0;
+  const accuracyDiff = comparison ? metrics.accuracy - comparison.currentAccuracy : 0;
+  const maxHitDiff = comparison ? metrics.maxHit - comparison.currentMaxHit : 0;
+  const costDiff = comparison ? cost.total - comparison.currentCost : 0;
 
   const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -179,15 +275,38 @@ const OptimizerResults: React.FC<OptimizerResultsProps> = ({ result, onApply, lo
         <h4 className="text-sm font-semibold text-gray-200 mb-2">Performance</h4>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <div className="text-lg font-bold text-green-400">{formatDps(metrics.dps)}</div>
+            <div className="flex items-center justify-center">
+              <span className="text-lg font-bold text-green-400">{formatDps(metrics.dps)}</span>
+              {comparison && (
+                <DifferenceDisplay
+                  value={dpsDiff}
+                  format={formatDps}
+                  showPercent
+                  baseValue={comparison.currentDps}
+                />
+              )}
+            </div>
             <div className="text-xs text-gray-400">DPS</div>
           </div>
           <div>
-            <div className="text-lg font-bold text-blue-400">{formatAccuracy(metrics.accuracy)}</div>
+            <div className="flex items-center justify-center">
+              <span className="text-lg font-bold text-blue-400">{formatAccuracy(metrics.accuracy)}</span>
+              {comparison && (
+                <DifferenceDisplay
+                  value={accuracyDiff}
+                  format={(v) => `${(v * 100).toFixed(1)}%`}
+                />
+              )}
+            </div>
             <div className="text-xs text-gray-400">Accuracy</div>
           </div>
           <div>
-            <div className="text-lg font-bold text-orange-400">{metrics.maxHit}</div>
+            <div className="flex items-center justify-center">
+              <span className="text-lg font-bold text-orange-400">{metrics.maxHit}</span>
+              {comparison && (
+                <DifferenceDisplay value={maxHitDiff} />
+              )}
+            </div>
             <div className="text-xs text-gray-400">Max Hit</div>
           </div>
         </div>
@@ -195,18 +314,47 @@ const OptimizerResults: React.FC<OptimizerResultsProps> = ({ result, onApply, lo
 
       {/* Equipment Grid */}
       <div className="bg-dark-500 rounded p-3">
-        <h4 className="text-sm font-semibold text-gray-200 mb-3">Optimized Gear</h4>
-        <ResultsEquipmentGrid equipment={equipment} perSlotCost={cost.perSlot} />
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold text-gray-200">Optimized Gear</h4>
+          {comparison && (
+            <span className="text-xs text-gray-400">
+              <span className="inline-block w-2 h-2 bg-green-500 rounded mr-1" />
+              Changed slots
+            </span>
+          )}
+        </div>
+        <ResultsEquipmentGrid
+          equipment={equipment}
+          perSlotCost={cost.perSlot}
+          currentEquipment={comparison?.currentEquipment}
+        />
       </div>
 
       {/* Cost Summary */}
       <div className="bg-dark-500 rounded p-3">
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-300">Cost to Buy</span>
-          <span className="text-lg font-bold text-yellow-400">
-            {cost.total > 0 ? formatBudget(cost.total) : 'Free'}
-          </span>
+          <div className="flex items-center">
+            <span className="text-lg font-bold text-yellow-400">
+              {cost.total > 0 ? formatBudget(cost.total) : 'Free'}
+            </span>
+            {comparison && costDiff !== 0 && (
+              <DifferenceDisplay
+                value={costDiff}
+                format={formatBudget}
+              />
+            )}
+          </div>
         </div>
+
+        {/* Cost comparison to current loadout */}
+        {comparison && comparison.currentCost > 0 && (
+          <div className="text-xs text-gray-400 mt-2">
+            Current gear cost:
+            {' '}
+            <span className="text-gray-300">{formatBudget(comparison.currentCost)}</span>
+          </div>
+        )}
 
         {/* Cost breakdown when there are owned items */}
         {cost.ownedSavings > 0 && (

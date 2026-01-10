@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { observer } from 'mobx-react-lite';
 import { toast } from 'react-toastify';
 import Modal from '@/app/components/generic/Modal';
@@ -8,8 +8,10 @@ import BudgetInput from '@/app/components/optimizer/BudgetInput';
 import CombatStyleSelector, { getCombatStyleFromType } from '@/app/components/optimizer/CombatStyleSelector';
 import ObjectiveSelector from '@/app/components/optimizer/ObjectiveSelector';
 import OwnedItemsManager from '@/app/components/optimizer/OwnedItemsManager';
-import OptimizerResults from '@/app/components/optimizer/OptimizerResults';
+import OptimizerResults, { ComparisonData } from '@/app/components/optimizer/OptimizerResults';
 import { CombatStyle, OptimizationObjective, OptimizerResult } from '@/types/Optimizer';
+import { calculateLoadoutCost } from '@/lib/Optimizer';
+import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 import { useStore } from '@/state';
 import { useCalc } from '@/worker/CalcWorker';
 import { OptimizeRequest, WorkerRequestType } from '@/worker/CalcWorkerTypes';
@@ -49,6 +51,26 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
 
   // Error state
   const [error, setError] = useState<string | null>(null);
+
+  // Calculate comparison data from current loadout
+  const comparisonData: ComparisonData | undefined = useMemo(() => {
+    // Calculate current player's metrics
+    const currentCalc = new PlayerVsNPCCalc(store.player, store.monster);
+    const currentDps = currentCalc.getDps();
+    const currentAccuracy = currentCalc.getHitChance();
+    const currentMaxHit = currentCalc.getMax();
+
+    // Calculate current equipment cost
+    const currentCostInfo = calculateLoadoutCost(store.player.equipment, ownedItems);
+
+    return {
+      currentDps,
+      currentAccuracy,
+      currentMaxHit,
+      currentCost: currentCostInfo.total,
+      currentEquipment: store.player.equipment,
+    };
+  }, [store.player, store.monster, ownedItems]);
 
   // Run optimization
   const runOptimization = useCallback(async () => {
@@ -169,6 +191,7 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
               result={result}
               onApply={applyLoadout}
               loadoutName={store.player.name}
+              comparison={comparisonData}
             />
           </div>
         )}
