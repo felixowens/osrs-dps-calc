@@ -856,3 +856,48 @@ This file tracks the progress of the gear optimizer implementation.
 - ui-008 (skill requirement toggle) or ui-010 (results display) could be next priorities
 
 **Next feature to work on:** ui-010 - Optimizer results are displayed (high priority UI feature)
+
+---
+
+## 2026-01-10 (ui-010)
+
+**Feature completed:** ui-010 - Optimizer results are displayed
+
+**What was implemented:**
+- Created `OptimizerResults` component (`src/app/components/optimizer/OptimizerResults.tsx`):
+  - Displays optimized equipment in a grid layout matching the main equipment grid
+  - Each slot shows item icon with tooltip for item name
+  - Shows per-slot cost below expensive items
+  - Displays DPS, accuracy, and max hit metrics in a summary section
+  - Shows total cost with formatted display (k/m/b suffixes)
+  - Shows meta info (evaluations count, time taken)
+- Updated `OptimizerModal` to wire up the Optimize button:
+  - Calls the worker with `WorkerRequestType.OPTIMIZE` request
+  - Shows loading state with spinner while optimization runs
+  - Displays error messages if optimization fails
+  - Shows results using the new OptimizerResults component
+  - Settings are collapsible after results are shown (for re-optimization)
+  - Button text changes to "Re-optimize" after initial run
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript type checking passes
+- All 173 Optimizer tests pass
+- Production build succeeds
+
+**Files changed:**
+- `src/app/components/optimizer/OptimizerResults.tsx` (new)
+- `src/app/components/optimizer/OptimizerModal.tsx` (modified)
+- `meta/optimizer-features.json` (modified - marked ui-010 as passing)
+
+**Commit:** 4f7d7637
+
+**Notes for next agent:**
+- The optimizer now has a full working flow: configure settings → click Optimize → see results
+- Results include all three ui-010 requirements: visual loadout, metrics, and cost
+- The next high-priority feature is ui-012 (apply optimized loadout) to let users use the results
+- ui-011 (comparison to current loadout) would enhance the results display
+- The worker integration is working correctly - optimization runs in background thread
+- Budget constraint and blacklist are passed to the optimizer correctly
+
+**Next feature to work on:** ui-012 - User can apply optimized loadout (high priority)
