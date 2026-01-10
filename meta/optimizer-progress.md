@@ -804,3 +804,55 @@ This file tracks the progress of the gear optimizer implementation.
 - ui-007 (blacklist manager) can follow a very similar pattern to OwnedItemsManager
 
 **Next feature to work on:** ui-007 - User can manage blacklisted items
+
+---
+
+## 2026-01-10 (ui-007 + data-003)
+
+**Features completed:**
+- ui-007 - User can manage blacklisted items
+- data-003 - User can blacklist specific items
+
+**What was implemented:**
+- Created `BlacklistManager` component (`src/app/components/optimizer/BlacklistManager.tsx`):
+  - Searchable combobox to find equipment items using fuzzy search
+  - Add items to blacklist by selecting from search results
+  - Display blacklisted items in a scrollable list with item icons
+  - Remove button for each blacklisted item (with green hover to indicate "unban")
+  - "Clear all" button to remove all blacklisted items at once
+  - Count display showing number of blacklisted items
+  - Uses red IconBan icon in search results to indicate exclusion
+- Added localStorage persistence via localforage:
+  - `loadBlacklistedItems()` - Load blacklisted items Set from storage
+  - `saveBlacklistedItems(items)` - Save blacklisted items Set to storage
+  - `clearBlacklistedItems()` - Clear blacklisted items from storage
+  - Automatic load on component mount
+  - Automatic save when blacklisted items change
+- Integrated BlacklistManager into OptimizerModal:
+  - Added blacklistedItems state (Set<number>)
+  - Placed below owned items section
+  - Removed placeholder "coming soon" text
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript type checking passes
+- All 173 Optimizer tests pass
+- Production build succeeds
+
+**Files changed:**
+- `src/app/components/optimizer/BlacklistManager.tsx` (new)
+- `src/app/components/optimizer/OptimizerModal.tsx` (modified)
+- `meta/optimizer-features.json` (modified - marked ui-007 and data-003 as passing)
+
+**Commit:** [pending]
+
+**Notes for next agent:**
+- The BlacklistManager follows the exact same pattern as OwnedItemsManager
+- BlacklistManager uses localforage for persistence (same as owned items)
+- Blacklisted items state is currently local to the modal (useState) but loads from/saves to localStorage
+- The blacklistedItems Set will need to be passed to the optimizer constraints when implementing the Optimize button
+- The search uses the existing Combobox component with fuzzy search
+- Items are filtered to exclude those with no stats and broken/inactive versions
+- ui-008 (skill requirement toggle) or ui-010 (results display) could be next priorities
+
+**Next feature to work on:** ui-010 - Optimizer results are displayed (high priority UI feature)

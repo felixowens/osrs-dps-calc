@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import Modal from '@/app/components/generic/Modal';
 import { IconSparkles } from '@tabler/icons-react';
+import BlacklistManager from '@/app/components/optimizer/BlacklistManager';
 import BudgetInput from '@/app/components/optimizer/BudgetInput';
 import CombatStyleSelector, { getCombatStyleFromType } from '@/app/components/optimizer/CombatStyleSelector';
 import ObjectiveSelector from '@/app/components/optimizer/ObjectiveSelector';
@@ -31,6 +32,9 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
 
   // Owned items state: Set of item IDs the user owns
   const [ownedItems, setOwnedItems] = useState<Set<number>>(new Set());
+
+  // Blacklisted items state: Set of item IDs to exclude from optimization
+  const [blacklistedItems, setBlacklistedItems] = useState<Set<number>>(new Set());
 
   return (
     <Modal
@@ -83,9 +87,7 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
           </div>
 
           <div className="bg-dark-400 rounded p-3">
-            <p className="text-gray-400 text-xs">
-              More settings coming soon: blacklist.
-            </p>
+            <BlacklistManager blacklistedItems={blacklistedItems} setBlacklistedItems={setBlacklistedItems} />
           </div>
         </div>
       </div>

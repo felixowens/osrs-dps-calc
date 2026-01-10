@@ -39,7 +39,7 @@
         "Blacklist is persisted to localStorage",
         "Blacklist persists across page reloads"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
@@ -375,7 +375,7 @@
         "Interface to remove items from blacklist",
         "Blacklisted items are displayed clearly"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
