@@ -2239,7 +2239,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2265,7 +2266,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2285,7 +2287,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2305,7 +2308,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2325,7 +2329,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2345,7 +2350,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2372,7 +2378,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2386,7 +2393,8 @@ describe('Optimizer', () => {
       });
 
       test('returns failure when API returns non-ok status', async () => {
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: false,
           status: 500,
           statusText: 'Internal Server Error',
@@ -2400,7 +2408,8 @@ describe('Optimizer', () => {
       });
 
       test('returns failure when network error occurs', async () => {
-        global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockRejectedValue(new Error('Network error'));
 
         const result = await fetchAndLoadPrices();
 
@@ -2418,7 +2427,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2443,7 +2453,8 @@ describe('Optimizer', () => {
           },
         };
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockPriceData),
         });
@@ -2457,7 +2468,8 @@ describe('Optimizer', () => {
 
       test('refreshing clears and reloads prices', async () => {
         // First load
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve({
             data: {
@@ -2471,7 +2483,8 @@ describe('Optimizer', () => {
         expect(getItemPrice(100)).toBe(100);
 
         // Refresh with different data
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve({
             data: {
@@ -2506,7 +2519,8 @@ describe('Optimizer', () => {
           high: 145000000, highTime: 1, low: 140000000, lowTime: 1,
         }; // Rapier ~142.5M
 
-        global.fetch = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = jest.fn<any>().mockResolvedValue({
           ok: true,
           json: () => Promise.resolve(mockData),
         });

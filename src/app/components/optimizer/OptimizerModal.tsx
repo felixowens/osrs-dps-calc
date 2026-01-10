@@ -4,7 +4,8 @@ import Modal from '@/app/components/generic/Modal';
 import { IconSparkles } from '@tabler/icons-react';
 import BudgetInput from '@/app/components/optimizer/BudgetInput';
 import CombatStyleSelector, { getCombatStyleFromType } from '@/app/components/optimizer/CombatStyleSelector';
-import { CombatStyle } from '@/types/Optimizer';
+import ObjectiveSelector from '@/app/components/optimizer/ObjectiveSelector';
+import { CombatStyle, OptimizationObjective } from '@/types/Optimizer';
 import { useStore } from '@/state';
 
 interface OptimizerModalProps {
@@ -23,6 +24,9 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
 
   // Combat style state: defaults to current loadout style
   const [combatStyle, setCombatStyle] = useState<CombatStyle>(defaultCombatStyle);
+
+  // Optimization objective state: defaults to DPS
+  const [objective, setObjective] = useState<OptimizationObjective>('dps');
 
   return (
     <Modal
@@ -60,6 +64,10 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
         <div className="space-y-4">
           <div className="bg-dark-400 rounded p-3">
             <CombatStyleSelector combatStyle={combatStyle} setCombatStyle={setCombatStyle} />
+          </div>
+
+          <div className="bg-dark-400 rounded p-3">
+            <ObjectiveSelector objective={objective} setObjective={setObjective} />
           </div>
 
           <div className="bg-dark-400 rounded p-3">
