@@ -3,6 +3,7 @@ import {
   filterBySlot, filterByCombatStyle, evaluateItem, evaluateItemDelta, calculateDps, createPlayerWithEquipment,
   findBestItemForSlot, optimizeLoadout,
   isTwoHandedWeapon, filterOneHandedWeapons, filterTwoHandedWeapons, findBestWeaponShieldCombination,
+  weaponRequiresAmmo, isAmmoValidForWeapon, filterValidAmmoForWeapon, findBestAmmoForWeapon,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -1043,6 +1044,232 @@ describe('Optimizer', () => {
         if (result.equipment.weapon) {
           expect(result.equipment.weapon.isTwoHanded).toBe(false);
         }
+      });
+    });
+  });
+
+  describe('Ammunition handling (opt-005)', () => {
+    // Get common test items
+    const twistedBow = findEquipment('Twisted bow'); // Bow that uses arrows
+    const runeCrossbow = findEquipment('Rune crossbow'); // Crossbow that uses bolts
+    const crystalBow = findEquipment('Crystal bow', 'Active'); // Doesn't use ammo
+    const abyssalWhip = findEquipment('Abyssal whip'); // Melee weapon
+    const dragonArrow = findEquipment('Dragon arrow', 'Unpoisoned');
+    const runeArrow = findEquipment('Rune arrow', 'Unpoisoned');
+    const runeBolt = findEquipment('Runite bolts', 'Unpoisoned');
+
+    describe('weaponRequiresAmmo', () => {
+      test('returns true for bows that use arrows', () => {
+        expect(weaponRequiresAmmo(twistedBow.id)).toBe(true);
+      });
+
+      test('returns true for crossbows that use bolts', () => {
+        expect(weaponRequiresAmmo(runeCrossbow.id)).toBe(true);
+      });
+
+      test('returns false for crystal bow (no ammo needed)', () => {
+        expect(weaponRequiresAmmo(crystalBow.id)).toBe(false);
+      });
+
+      test('returns false for melee weapons', () => {
+        expect(weaponRequiresAmmo(abyssalWhip.id)).toBe(false);
+      });
+
+      test('returns false for undefined weapon', () => {
+        expect(weaponRequiresAmmo(undefined)).toBe(false);
+      });
+    });
+
+    describe('isAmmoValidForWeapon', () => {
+      test('dragon arrow is valid for twisted bow', () => {
+        expect(isAmmoValidForWeapon(twistedBow.id, dragonArrow.id)).toBe(true);
+      });
+
+      test('rune arrow is valid for twisted bow', () => {
+        expect(isAmmoValidForWeapon(twistedBow.id, runeArrow.id)).toBe(true);
+      });
+
+      test('rune bolt is NOT valid for twisted bow (wrong ammo type)', () => {
+        expect(isAmmoValidForWeapon(twistedBow.id, runeBolt.id)).toBe(false);
+      });
+
+      test('rune bolt is valid for rune crossbow', () => {
+        expect(isAmmoValidForWeapon(runeCrossbow.id, runeBolt.id)).toBe(true);
+      });
+
+      test('dragon arrow is NOT valid for rune crossbow (wrong ammo type)', () => {
+        expect(isAmmoValidForWeapon(runeCrossbow.id, dragonArrow.id)).toBe(false);
+      });
+
+      test('returns false for undefined weapon', () => {
+        expect(isAmmoValidForWeapon(undefined, dragonArrow.id)).toBe(false);
+      });
+    });
+
+    describe('filterValidAmmoForWeapon', () => {
+      test('filters arrows for twisted bow', () => {
+        const allAmmo = filterBySlot('ammo');
+        const validAmmo = filterValidAmmoForWeapon(twistedBow.id, allAmmo);
+
+        // Should have some valid ammo
+        expect(validAmmo.length).toBeGreaterThan(0);
+
+        // All results should be ammo slot
+        expect(validAmmo.every((a) => a.slot === 'ammo')).toBe(true);
+
+        // Dragon arrow should be in the list
+        expect(validAmmo.some((a) => a.id === dragonArrow.id)).toBe(true);
+
+        // Rune bolts should NOT be in the list
+        expect(validAmmo.some((a) => a.id === runeBolt.id)).toBe(false);
+      });
+
+      test('filters bolts for rune crossbow', () => {
+        const allAmmo = filterBySlot('ammo');
+        const validAmmo = filterValidAmmoForWeapon(runeCrossbow.id, allAmmo);
+
+        // Should have some valid ammo
+        expect(validAmmo.length).toBeGreaterThan(0);
+
+        // Rune bolts should be in the list
+        expect(validAmmo.some((a) => a.id === runeBolt.id)).toBe(true);
+
+        // Dragon arrows should NOT be in the list
+        expect(validAmmo.some((a) => a.id === dragonArrow.id)).toBe(false);
+      });
+
+      test('returns empty array for crystal bow (no ammo needed)', () => {
+        const allAmmo = filterBySlot('ammo');
+        const validAmmo = filterValidAmmoForWeapon(crystalBow.id, allAmmo);
+
+        expect(validAmmo.length).toBe(0);
+      });
+
+      test('returns empty array for undefined weapon', () => {
+        const allAmmo = filterBySlot('ammo');
+        const validAmmo = filterValidAmmoForWeapon(undefined, allAmmo);
+
+        expect(validAmmo.length).toBe(0);
+      });
+    });
+
+    describe('findBestAmmoForWeapon', () => {
+      test('finds best arrow for twisted bow', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: twistedBow } });
+        const allAmmo = filterBySlot('ammo');
+
+        const result = findBestAmmoForWeapon(player, monster, allAmmo);
+
+        expect(result.slot).toBe('ammo');
+        expect(result.bestItem).not.toBeNull();
+        expect(result.bestItem?.slot).toBe('ammo');
+
+        // Best ammo should be a valid arrow for twisted bow
+        expect(isAmmoValidForWeapon(twistedBow.id, result.bestItem!.id)).toBe(true);
+
+        // Should have high ranged strength (barbed arrows have 125, dragon arrows have 60)
+        expect(result.bestItem!.bonuses.ranged_str).toBeGreaterThan(50);
+      });
+
+      test('finds best bolt for rune crossbow', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: runeCrossbow } });
+        const allAmmo = filterBySlot('ammo');
+
+        const result = findBestAmmoForWeapon(player, monster, allAmmo);
+
+        expect(result.slot).toBe('ammo');
+        expect(result.bestItem).not.toBeNull();
+        expect(result.bestItem?.slot).toBe('ammo');
+
+        // Result should be a bolt type
+        expect(result.bestItem?.name.toLowerCase()).toContain('bolt');
+      });
+
+      test('returns empty result for crystal bow (no ammo needed)', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: crystalBow } });
+        const allAmmo = filterBySlot('ammo');
+
+        const result = findBestAmmoForWeapon(player, monster, allAmmo);
+
+        expect(result.bestItem).toBeNull();
+        expect(result.candidates.length).toBe(0);
+      });
+
+      test('returns empty result for melee weapon', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+        const allAmmo = filterBySlot('ammo');
+
+        const result = findBestAmmoForWeapon(player, monster, allAmmo);
+
+        expect(result.bestItem).toBeNull();
+        expect(result.candidates.length).toBe(0);
+      });
+
+      test('respects blacklist constraint', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: twistedBow } });
+        const allAmmo = filterBySlot('ammo');
+
+        // Blacklist dragon arrows
+        const constraints = { blacklistedItems: new Set([dragonArrow.id]) };
+
+        const result = findBestAmmoForWeapon(player, monster, allAmmo, constraints);
+
+        expect(result.bestItem).not.toBeNull();
+        // Should not be dragon arrow
+        expect(result.bestItem?.id).not.toBe(dragonArrow.id);
+      });
+    });
+
+    describe('optimizeLoadout with ammunition', () => {
+      test('selects ammo for ranged weapons that require it', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'ranged' });
+
+        // If a bow/crossbow was selected
+        if (result.equipment.weapon && weaponRequiresAmmo(result.equipment.weapon.id)) {
+          // Ammo should be selected
+          expect(result.equipment.ammo).not.toBeNull();
+          expect(result.equipment.ammo?.slot).toBe('ammo');
+
+          // Ammo should be valid for the weapon
+          expect(isAmmoValidForWeapon(result.equipment.weapon.id, result.equipment.ammo!.id)).toBe(true);
+        }
+      });
+
+      test('does not select ammo for melee weapons', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Melee weapons don't use ammo
+        expect(result.equipment.ammo).toBeNull();
+      });
+
+      test('higher tier ammo produces higher DPS', () => {
+        const monster = getTestMonster('Abyssal demon');
+
+        // Get DPS with rune arrows
+        const runeArrowPlayer = getTestPlayer(monster, {
+          equipment: { weapon: twistedBow, ammo: runeArrow },
+        });
+        const runeDps = calculateDps(runeArrowPlayer, monster);
+
+        // Get DPS with dragon arrows
+        const dragonArrowPlayer = getTestPlayer(monster, {
+          equipment: { weapon: twistedBow, ammo: dragonArrow },
+        });
+        const dragonDps = calculateDps(dragonArrowPlayer, monster);
+
+        // Dragon arrows should produce higher DPS (60 ranged str vs 49)
+        expect(dragonDps).toBeGreaterThan(runeDps);
       });
     });
   });

@@ -4,7 +4,9 @@ import {
   CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation,
   OptimizerConstraints, OptimizerResult, SlotOptimizationResult,
 } from '@/types/Optimizer';
-import { availableEquipment, calculateEquipmentBonusesFromGear } from '@/lib/Equipment';
+import {
+  AmmoApplicability, ammoApplicability, availableEquipment, calculateEquipmentBonusesFromGear,
+} from '@/lib/Equipment';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 
 /**
@@ -366,7 +368,9 @@ export function findBestItemForSlot(
 }
 
 /**
- * Slot optimization order. Weapon and shield are handled specially for 2H vs 1H+shield comparison.
+ * Slot optimization order. Weapon, shield, and ammo are handled specially.
+ * - Weapon + shield: handled together for 2H vs 1H+shield comparison
+ * - Ammo: handled after weapon to filter valid ammo types
  * Other slots are ordered by typical impact on DPS.
  */
 const SLOT_OPTIMIZATION_ORDER_NON_WEAPON: EquipmentSlot[] = [
@@ -377,8 +381,8 @@ const SLOT_OPTIMIZATION_ORDER_NON_WEAPON: EquipmentSlot[] = [
   'feet',
   'cape',
   'neck',
-  'ammo',
   'ring',
+  // Note: 'ammo' is intentionally excluded here - it's handled specially after weapon selection
 ];
 
 /**
@@ -409,6 +413,95 @@ export function filterOneHandedWeapons(weapons: EquipmentPiece[]): EquipmentPiec
  */
 export function filterTwoHandedWeapons(weapons: EquipmentPiece[]): EquipmentPiece[] {
   return weapons.filter((w) => w.isTwoHanded);
+}
+
+/**
+ * Check if a weapon requires ammunition.
+ *
+ * Some ranged weapons (bows, crossbows, ballistas) require compatible ammo.
+ * Others (crystal bow, blowpipe, powered staves) don't need ammo in the ammo slot.
+ *
+ * @param weaponId - The ID of the weapon to check
+ * @returns True if the weapon requires ammunition
+ */
+export function weaponRequiresAmmo(weaponId: number | undefined): boolean {
+  if (weaponId === undefined) {
+    return false;
+  }
+  // If ammoApplicability returns INVALID for an arbitrary invalid ammo ID (-1),
+  // it means the weapon requires specific ammo
+  return ammoApplicability(weaponId, -1) === AmmoApplicability.INVALID;
+}
+
+/**
+ * Check if an ammo item is valid for a given weapon.
+ *
+ * @param weaponId - The ID of the weapon
+ * @param ammoId - The ID of the ammo to check
+ * @returns True if the ammo is valid for the weapon
+ */
+export function isAmmoValidForWeapon(weaponId: number | undefined, ammoId: number): boolean {
+  if (weaponId === undefined) {
+    return false;
+  }
+  return ammoApplicability(weaponId, ammoId) === AmmoApplicability.INCLUDED;
+}
+
+/**
+ * Filter ammo items to only those valid for a given weapon.
+ *
+ * @param weaponId - The ID of the weapon
+ * @param ammoCandidates - Array of potential ammo items
+ * @returns Array of ammo items that are valid for the weapon
+ */
+export function filterValidAmmoForWeapon(
+  weaponId: number | undefined,
+  ammoCandidates: EquipmentPiece[],
+): EquipmentPiece[] {
+  if (weaponId === undefined) {
+    return [];
+  }
+  return ammoCandidates.filter(
+    (ammo) => ammo.slot === 'ammo' && isAmmoValidForWeapon(weaponId, ammo.id),
+  );
+}
+
+/**
+ * Find the best ammo for a ranged weapon.
+ *
+ * Given a weapon and the current player loadout, this function finds the
+ * ammunition that produces the highest DPS.
+ *
+ * @param player - The base player loadout (with weapon already equipped)
+ * @param monster - The monster to optimize against
+ * @param ammoCandidates - Candidate ammo items (should be pre-filtered to valid ammo)
+ * @param constraints - Optional constraints to apply
+ * @returns SlotOptimizationResult with the best ammo
+ */
+export function findBestAmmoForWeapon(
+  player: Player,
+  monster: Monster,
+  ammoCandidates: EquipmentPiece[],
+  constraints?: OptimizerConstraints,
+): SlotOptimizationResult {
+  // Get the weapon ID from the player's equipment
+  const weaponId = player.equipment.weapon?.id;
+
+  if (!weaponId || !weaponRequiresAmmo(weaponId)) {
+    // Weapon doesn't require ammo, return empty result
+    return {
+      slot: 'ammo',
+      bestItem: null,
+      score: calculateDps(player, monster), // DPS without ammo
+      candidates: [],
+    };
+  }
+
+  // Filter to valid ammo for this weapon
+  const validAmmo = filterValidAmmoForWeapon(weaponId, ammoCandidates);
+
+  // Use findBestItemForSlot with the filtered ammo
+  return findBestItemForSlot('ammo', player, monster, validAmmo, constraints);
 }
 
 /**
@@ -546,15 +639,22 @@ export interface OptimizeLoadoutOptions {
  * This function uses a greedy per-slot algorithm:
  * 1. Pre-filters equipment by combat style (if specified)
  * 2. Optimizes weapon+shield together to handle 2H vs 1H+shield comparison
- * 3. For remaining slots:
+ * 3. Optimizes ammunition (if the selected weapon requires it)
+ * 4. For remaining slots:
  *    - Finds the best item using `findBestItemForSlot`
  *    - Updates the player's equipment with the best item
- * 4. Returns the complete optimized loadout with metrics
+ * 5. Returns the complete optimized loadout with metrics
  *
  * Two-handed weapon handling (opt-004):
  * - Compares best 2H weapon vs best 1H weapon + best shield
  * - Chooses whichever combination produces higher DPS
  * - When 2H is selected, shield slot is set to null
+ *
+ * Ammunition handling (opt-005):
+ * - After weapon is selected, checks if it requires ammunition
+ * - For bows: selects best arrow compatible with the bow
+ * - For crossbows: selects best bolt compatible with the crossbow
+ * - For weapons that don't need ammo (crystal bow, blowpipe): ammo slot is left empty
  *
  * The greedy approach may miss synergies (e.g., set bonuses), but provides
  * a fast baseline optimization. Set bonus handling will be added in opt-006/opt-007.
@@ -641,7 +741,29 @@ export function optimizeLoadout(
     currentPlayer = createPlayerWithEquipment(currentPlayer, 'shield', weaponShieldResult.shield, monster);
   }
 
-  // Step 2: Optimize remaining slots (excluding weapon and shield)
+  // Step 2: Optimize ammunition (must be done after weapon selection to know valid ammo types)
+  // Only if the selected weapon requires ammunition
+  const ammoCandidates = candidatesBySlot.ammo;
+  const weaponId = optimizedEquipment.weapon?.id;
+
+  if (weaponId && weaponRequiresAmmo(weaponId)) {
+    // Filter to valid ammo for this weapon and find the best
+    const ammoResult = findBestAmmoForWeapon(currentPlayer, monster, ammoCandidates, constraints);
+    totalEvaluations += ammoResult.candidates.length;
+
+    optimizedEquipment.ammo = ammoResult.bestItem;
+
+    if (ammoResult.bestItem) {
+      currentPlayer = createPlayerWithEquipment(currentPlayer, 'ammo', ammoResult.bestItem, monster);
+    }
+  } else {
+    // Weapon doesn't require ammo, skip ammo slot (leave as null)
+    // Note: Some items could still be useful in ammo slot for defensive stats,
+    // but for DPS optimization we skip them as they don't contribute
+    optimizedEquipment.ammo = null;
+  }
+
+  // Step 3: Optimize remaining slots (excluding weapon, shield, and ammo)
   for (const slot of SLOT_OPTIMIZATION_ORDER_NON_WEAPON) {
     const candidates = candidatesBySlot[slot];
 
