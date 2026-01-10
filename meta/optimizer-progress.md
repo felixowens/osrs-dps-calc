@@ -494,3 +494,52 @@ This file tracks the progress of the gear optimizer implementation.
 - UI integration (ui-001+) can now use the worker to run optimizations without blocking
 
 **Next feature to work on:** data-001 - Equipment items have price data available (or ui-001 to start UI)
+
+---
+
+## 2026-01-10 (data-001)
+
+**Feature completed:** data-001 - Equipment items have price data available
+
+**What was implemented:**
+- Added price fetching functions to `src/lib/Optimizer.ts`:
+  - `fetchAndLoadPrices(useMidPrice?: boolean)`: Fetches prices from OSRS Wiki Prices API
+  - `refreshPrices(useMidPrice?: boolean)`: Alias for fetchAndLoadPrices
+  - `arePricesLoaded()`: Check if prices have been loaded
+  - `getPriceStoreSize()`: Get count of items with prices
+  - `getLastPriceFetchTime()`: Get timestamp of last successful fetch
+- Uses the OSRS Wiki Real-time Prices API (`https://prices.runescape.wiki/api/v1/osrs/latest`)
+- By default uses mid price (average of high/low), can optionally use high price only
+- Handles missing price data gracefully (null high or low values)
+- Returns `PriceFetchResult` with success status, item count, timestamp, and error if any
+- Added 16 comprehensive tests for price fetching functionality:
+  - Tests for successful API response handling
+  - Tests for mid price vs high price calculation
+  - Tests for handling missing high/low prices
+  - Tests for API error handling (non-ok status, network errors)
+  - Tests for timestamp tracking
+  - Integration test verifying budget filtering works with loaded prices
+
+**Verification:**
+- ESLint passes with no errors
+- All 173 Optimizer tests pass
+- TypeScript type checking passes
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added price fetching functions)
+- `src/tests/lib/Optimizer.test.ts` (modified - added price data tests)
+- `meta/optimizer-features.json` (modified - marked data-001 as passes: true)
+
+**Commit:** fa994ef1
+
+**Notes for next agent:**
+- Prices are fetched from OSRS Wiki API which provides real-time GE prices
+- The API returns high/low prices - we use mid price by default for better accuracy
+- API requires User-Agent header (set to 'osrs-dps-calc - gear optimizer')
+- Price data is stored in the in-memory price store (same store used by budget filtering)
+- Call `fetchAndLoadPrices()` before running optimization with budget constraints
+- The API returns ~17000+ item prices in a single request
+- Items without price data in the API response have null price stored
+- Integration with UI (ui-001+) should call fetchAndLoadPrices on app load or on demand
+
+**Next feature to work on:** ui-001 - Optimizer can be launched from the UI (Phase 4)

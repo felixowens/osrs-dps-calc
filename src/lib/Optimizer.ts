@@ -106,6 +106,169 @@ export function clearPriceStore(): void {
 }
 
 /**
+ * Get the number of items with prices stored.
+ */
+export function getPriceStoreSize(): number {
+  return priceStore.size;
+}
+
+// ============================================================================
+// Price Fetching (data-001)
+// ============================================================================
+
+/**
+ * OSRS Wiki Prices API endpoint.
+ * Returns latest price data for all tradeable items.
+ * @see https://oldschool.runescape.wiki/w/RuneScape:Real-time_Prices
+ */
+const PRICES_API_URL = 'https://prices.runescape.wiki/api/v1/osrs/latest';
+
+/**
+ * User agent for API requests (required by OSRS Wiki API).
+ */
+const USER_AGENT = 'osrs-dps-calc - gear optimizer';
+
+/**
+ * Response structure from the OSRS Wiki Prices API.
+ */
+interface PricesApiResponse {
+  data: {
+    [itemId: string]: {
+      high: number | null;
+      highTime: number | null;
+      low: number | null;
+      lowTime: number | null;
+    };
+  };
+}
+
+/**
+ * Result of a price fetch operation.
+ */
+export interface PriceFetchResult {
+  success: boolean;
+  itemCount: number;
+  error?: string;
+  timestamp: number;
+}
+
+/** Timestamp of last successful price fetch */
+let lastPriceFetchTime: number | null = null;
+
+/**
+ * Get the timestamp of the last successful price fetch.
+ * Returns null if prices have never been fetched.
+ */
+export function getLastPriceFetchTime(): number | null {
+  return lastPriceFetchTime;
+}
+
+/**
+ * Check if prices have been loaded.
+ */
+export function arePricesLoaded(): boolean {
+  return priceStore.size > 0;
+}
+
+/**
+ * Fetch prices from the OSRS Wiki Prices API and load them into the price store.
+ *
+ * This function:
+ * 1. Fetches the latest price data from the OSRS Wiki API
+ * 2. Clears the existing price store
+ * 3. Loads all prices into the store
+ * 4. Marks items with no price data as having unknown prices
+ *
+ * @param useMidPrice - If true, uses the average of high/low prices. If false, uses high price. Default: true.
+ * @returns Result indicating success/failure and number of items loaded
+ *
+ * @example
+ * ```typescript
+ * const result = await fetchAndLoadPrices();
+ * if (result.success) {
+ *   console.log(`Loaded ${result.itemCount} item prices`);
+ * } else {
+ *   console.error(`Failed to load prices: ${result.error}`);
+ * }
+ * ```
+ */
+export async function fetchAndLoadPrices(useMidPrice: boolean = true): Promise<PriceFetchResult> {
+  try {
+    const response = await fetch(PRICES_API_URL, {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        itemCount: 0,
+        error: `API returned status ${response.status}: ${response.statusText}`,
+        timestamp: Date.now(),
+      };
+    }
+
+    const data: PricesApiResponse = await response.json();
+
+    // Clear existing prices before loading new ones
+    clearPriceStore();
+
+    let loadedCount = 0;
+
+    // Load all prices from the API response
+    for (const [itemIdStr, priceData] of Object.entries(data.data)) {
+      const itemId = parseInt(itemIdStr);
+
+      // Calculate the price to use
+      let price: number | null = null;
+      if (priceData.high !== null && priceData.low !== null) {
+        if (useMidPrice) {
+          price = Math.round((priceData.high + priceData.low) / 2);
+        } else {
+          price = priceData.high;
+        }
+      } else if (priceData.high !== null) {
+        price = priceData.high;
+      } else if (priceData.low !== null) {
+        price = priceData.low;
+      }
+
+      // Store the price (null prices are handled by the store)
+      setItemPrice(itemId, price, true);
+      loadedCount += 1;
+    }
+
+    lastPriceFetchTime = Date.now();
+
+    return {
+      success: true,
+      itemCount: loadedCount,
+      timestamp: lastPriceFetchTime,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return {
+      success: false,
+      itemCount: 0,
+      error: errorMessage,
+      timestamp: Date.now(),
+    };
+  }
+}
+
+/**
+ * Refresh prices by fetching the latest data from the API.
+ * Alias for fetchAndLoadPrices for convenience.
+ *
+ * @param useMidPrice - If true, uses the average of high/low prices. If false, uses high price. Default: true.
+ * @returns Result indicating success/failure and number of items loaded
+ */
+export async function refreshPrices(useMidPrice: boolean = true): Promise<PriceFetchResult> {
+  return fetchAndLoadPrices(useMidPrice);
+}
+
+/**
  * Get the price info for an item.
  *
  * @param itemId - The item's ID

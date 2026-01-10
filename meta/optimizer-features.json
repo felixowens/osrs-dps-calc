@@ -14,7 +14,7 @@
         "Prices are stored and accessible per equipment item",
         "Prices can be refreshed/updated"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
