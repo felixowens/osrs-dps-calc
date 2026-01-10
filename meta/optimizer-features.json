@@ -87,7 +87,7 @@
         "Owned items are considered free (price = 0)",
         "Untradeable items are handled appropriately"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {

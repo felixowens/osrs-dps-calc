@@ -1,9 +1,15 @@
-import { describe, expect, test } from '@jest/globals';
+import {
+  describe, expect, test, beforeEach,
+} from '@jest/globals';
 import {
   filterBySlot, filterByCombatStyle, evaluateItem, evaluateItemDelta, calculateDps, createPlayerWithEquipment,
   findBestItemForSlot, optimizeLoadout,
   isTwoHandedWeapon, filterOneHandedWeapons, filterTwoHandedWeapons, findBestWeaponShieldCombination,
   weaponRequiresAmmo, isAmmoValidForWeapon, filterValidAmmoForWeapon, findBestAmmoForWeapon,
+  // Price store functions
+  setItemPrice, setItemPrices, setItemUntradeable, clearPriceStore,
+  getItemPrice, getItemPriceInfo, getEffectivePrice, isItemWithinBudget,
+  filterByBudget,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -1270,6 +1276,312 @@ describe('Optimizer', () => {
 
         // Dragon arrows should produce higher DPS (60 ranged str vs 49)
         expect(dragonDps).toBeGreaterThan(runeDps);
+      });
+    });
+  });
+
+  describe('Budget filtering (filter-003)', () => {
+    // Test items
+    const abyssalWhip = findEquipment('Abyssal whip');
+    const rapier = findEquipment('Ghrazi rapier');
+    const torvaHelm = findEquipment('Torva full helm');
+    const bronzeSword = findEquipment('Bronze sword');
+
+    // Clear price store before each test to ensure clean state
+    beforeEach(() => {
+      clearPriceStore();
+    });
+
+    describe('Price Store', () => {
+      describe('setItemPrice', () => {
+        test('sets price for an item', () => {
+          setItemPrice(abyssalWhip.id, 2_500_000);
+          const info = getItemPriceInfo(abyssalWhip.id);
+
+          expect(info).toBeDefined();
+          expect(info?.price).toBe(2_500_000);
+          expect(info?.isTradeable).toBe(true);
+        });
+
+        test('sets untradeable when price is null', () => {
+          setItemPrice(abyssalWhip.id, null);
+          const info = getItemPriceInfo(abyssalWhip.id);
+
+          expect(info).toBeDefined();
+          expect(info?.price).toBeNull();
+          expect(info?.isTradeable).toBe(false);
+        });
+
+        test('can override isTradeable parameter', () => {
+          // Set tradeable even with null price
+          setItemPrice(abyssalWhip.id, null, true);
+          const info = getItemPriceInfo(abyssalWhip.id);
+
+          expect(info?.price).toBeNull();
+          expect(info?.isTradeable).toBe(true);
+        });
+      });
+
+      describe('setItemPrices', () => {
+        test('sets multiple prices at once', () => {
+          setItemPrices({
+            [abyssalWhip.id]: 2_500_000,
+            [rapier.id]: 140_000_000,
+            [bronzeSword.id]: 100,
+          });
+
+          expect(getItemPrice(abyssalWhip.id)).toBe(2_500_000);
+          expect(getItemPrice(rapier.id)).toBe(140_000_000);
+          expect(getItemPrice(bronzeSword.id)).toBe(100);
+        });
+      });
+
+      describe('setItemUntradeable', () => {
+        test('marks item as untradeable', () => {
+          setItemUntradeable(torvaHelm.id);
+          const info = getItemPriceInfo(torvaHelm.id);
+
+          expect(info).toBeDefined();
+          expect(info?.price).toBeNull();
+          expect(info?.isTradeable).toBe(false);
+        });
+      });
+
+      describe('clearPriceStore', () => {
+        test('clears all stored prices', () => {
+          setItemPrice(abyssalWhip.id, 2_500_000);
+          setItemPrice(rapier.id, 140_000_000);
+
+          clearPriceStore();
+
+          expect(getItemPriceInfo(abyssalWhip.id)).toBeUndefined();
+          expect(getItemPriceInfo(rapier.id)).toBeUndefined();
+        });
+      });
+
+      describe('getItemPrice', () => {
+        test('returns price for tradeable item', () => {
+          setItemPrice(abyssalWhip.id, 2_500_000);
+          expect(getItemPrice(abyssalWhip.id)).toBe(2_500_000);
+        });
+
+        test('returns null for item without price data', () => {
+          expect(getItemPrice(abyssalWhip.id)).toBeNull();
+        });
+
+        test('returns 0 for untradeable item', () => {
+          setItemUntradeable(torvaHelm.id);
+          expect(getItemPrice(torvaHelm.id)).toBe(0);
+        });
+      });
+
+      describe('getEffectivePrice', () => {
+        test('returns price for non-owned tradeable item', () => {
+          setItemPrice(abyssalWhip.id, 2_500_000);
+          expect(getEffectivePrice(abyssalWhip.id)).toBe(2_500_000);
+        });
+
+        test('returns 0 for owned item', () => {
+          setItemPrice(abyssalWhip.id, 2_500_000);
+          const ownedItems = new Set([abyssalWhip.id]);
+          expect(getEffectivePrice(abyssalWhip.id, ownedItems)).toBe(0);
+        });
+
+        test('returns 0 for untradeable item', () => {
+          setItemUntradeable(torvaHelm.id);
+          expect(getEffectivePrice(torvaHelm.id)).toBe(0);
+        });
+
+        test('returns null for item without price data', () => {
+          expect(getEffectivePrice(abyssalWhip.id)).toBeNull();
+        });
+
+        test('owned item takes precedence over untradeable', () => {
+          setItemUntradeable(torvaHelm.id);
+          const ownedItems = new Set([torvaHelm.id]);
+          // Both should return 0, but ownership check happens first
+          expect(getEffectivePrice(torvaHelm.id, ownedItems)).toBe(0);
+        });
+      });
+
+      describe('isItemWithinBudget', () => {
+        test('returns true when item price is within budget', () => {
+          setItemPrice(abyssalWhip.id, 2_500_000);
+          expect(isItemWithinBudget(abyssalWhip.id, 5_000_000)).toBe(true);
+        });
+
+        test('returns true when item price equals budget', () => {
+          setItemPrice(abyssalWhip.id, 2_500_000);
+          expect(isItemWithinBudget(abyssalWhip.id, 2_500_000)).toBe(true);
+        });
+
+        test('returns false when item price exceeds budget', () => {
+          setItemPrice(rapier.id, 140_000_000);
+          expect(isItemWithinBudget(rapier.id, 100_000_000)).toBe(false);
+        });
+
+        test('returns true for owned item regardless of price', () => {
+          setItemPrice(rapier.id, 140_000_000);
+          const ownedItems = new Set([rapier.id]);
+          expect(isItemWithinBudget(rapier.id, 1_000_000, ownedItems)).toBe(true);
+        });
+
+        test('returns true for untradeable item', () => {
+          setItemUntradeable(torvaHelm.id);
+          expect(isItemWithinBudget(torvaHelm.id, 0)).toBe(true);
+        });
+
+        test('returns true for unknown price by default', () => {
+          // No price set
+          expect(isItemWithinBudget(abyssalWhip.id, 0)).toBe(true);
+        });
+
+        test('returns false for unknown price when excludeUnknownPrices is true', () => {
+          // No price set
+          expect(isItemWithinBudget(abyssalWhip.id, 0, undefined, true)).toBe(false);
+        });
+      });
+    });
+
+    describe('filterByBudget', () => {
+      test('filters items by max price', () => {
+        // Set prices for test items
+        setItemPrice(abyssalWhip.id, 2_500_000);
+        setItemPrice(rapier.id, 140_000_000);
+        setItemPrice(bronzeSword.id, 100);
+
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+
+        // Filter by 5M budget
+        const filtered = filterByBudget(5_000_000, testItems);
+
+        expect(filtered).toContain(abyssalWhip);
+        expect(filtered).toContain(bronzeSword);
+        expect(filtered).not.toContain(rapier);
+      });
+
+      test('owned items are considered free', () => {
+        setItemPrice(rapier.id, 140_000_000);
+        setItemPrice(abyssalWhip.id, 2_500_000);
+
+        const testItems = [abyssalWhip, rapier];
+        const ownedItems = new Set([rapier.id]);
+
+        // Both should pass with 1M budget since rapier is owned (free)
+        const filtered = filterByBudget(1_000_000, testItems, ownedItems);
+
+        expect(filtered).toContain(rapier); // Owned, so free
+        expect(filtered).not.toContain(abyssalWhip); // Not owned, over budget
+      });
+
+      test('untradeable items are considered free', () => {
+        setItemUntradeable(torvaHelm.id);
+        setItemPrice(abyssalWhip.id, 2_500_000);
+
+        const testItems = [torvaHelm, abyssalWhip];
+
+        // Filter with 0 budget
+        const filtered = filterByBudget(0, testItems);
+
+        expect(filtered).toContain(torvaHelm); // Untradeable, so free
+        expect(filtered).not.toContain(abyssalWhip); // Has price, over budget
+      });
+
+      test('items with unknown prices are included by default', () => {
+        // Don't set any prices - all prices unknown
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+
+        const filtered = filterByBudget(0, testItems);
+
+        // All items included because prices are unknown
+        expect(filtered).toContain(abyssalWhip);
+        expect(filtered).toContain(rapier);
+        expect(filtered).toContain(bronzeSword);
+      });
+
+      test('items with unknown prices excluded when excludeUnknownPrices is true', () => {
+        // Set price only for whip
+        setItemPrice(abyssalWhip.id, 2_500_000);
+
+        const testItems = [abyssalWhip, rapier, bronzeSword];
+
+        const filtered = filterByBudget(5_000_000, testItems, undefined, true);
+
+        expect(filtered).toContain(abyssalWhip); // Has price, within budget
+        expect(filtered).not.toContain(rapier); // Unknown price, excluded
+        expect(filtered).not.toContain(bronzeSword); // Unknown price, excluded
+      });
+
+      test('can chain with other filters', () => {
+        // Set prices
+        setItemPrices({
+          [abyssalWhip.id]: 2_500_000,
+          [rapier.id]: 140_000_000,
+          [bronzeSword.id]: 100,
+        });
+
+        // Filter by slot first, then by budget
+        const weapons = filterBySlot('weapon');
+        const affordableWeapons = filterByBudget(5_000_000, weapons);
+
+        // Should have some weapons within budget
+        expect(affordableWeapons.length).toBeGreaterThan(0);
+
+        // Should not have any weapons over budget with known prices
+        // (unless their prices are unknown)
+        expect(affordableWeapons).not.toContain(rapier);
+      });
+
+      test('returns all items when no price data and excludeUnknownPrices is false', () => {
+        // Clear all prices
+        clearPriceStore();
+
+        const weapons = filterBySlot('weapon').slice(0, 100);
+        const filtered = filterByBudget(0, weapons);
+
+        // All items should be included (unknown prices are included by default)
+        expect(filtered.length).toBe(100);
+      });
+
+      test('handles edge case of zero budget', () => {
+        setItemPrice(bronzeSword.id, 100);
+        setItemPrice(abyssalWhip.id, 0); // Free item
+
+        const testItems = [bronzeSword, abyssalWhip];
+        const filtered = filterByBudget(0, testItems);
+
+        expect(filtered).toContain(abyssalWhip); // 0 GP item
+        expect(filtered).not.toContain(bronzeSword); // 100 GP, over 0 budget
+      });
+
+      test('handles large budgets correctly', () => {
+        setItemPrice(rapier.id, 140_000_000);
+        setItemPrice(abyssalWhip.id, 2_500_000);
+
+        const testItems = [rapier, abyssalWhip];
+
+        // Very large budget (1 billion)
+        const filtered = filterByBudget(1_000_000_000, testItems);
+
+        expect(filtered).toContain(rapier);
+        expect(filtered).toContain(abyssalWhip);
+      });
+
+      test('combined owned + budget filtering', () => {
+        // Expensive item owned, cheap item not owned
+        setItemPrice(rapier.id, 140_000_000);
+        setItemPrice(bronzeSword.id, 100);
+        setItemPrice(abyssalWhip.id, 2_500_000);
+
+        const testItems = [rapier, bronzeSword, abyssalWhip];
+        const ownedItems = new Set([rapier.id]);
+
+        // Budget of 500 GP
+        const filtered = filterByBudget(500, testItems, ownedItems);
+
+        expect(filtered).toContain(rapier); // Owned (free)
+        expect(filtered).toContain(bronzeSword); // Cheap
+        expect(filtered).not.toContain(abyssalWhip); // Not owned, over budget
       });
     });
   });

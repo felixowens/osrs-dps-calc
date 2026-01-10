@@ -6,6 +6,16 @@ import { EquipmentPiece, PlayerEquipment, PlayerSkills } from '@/types/Player';
 export type EquipmentSlot = keyof PlayerEquipment;
 
 /**
+ * Price information for an item.
+ */
+export interface ItemPrice {
+  /** The item's price in GP (null if price is unknown) */
+  price: number | null;
+  /** Whether the item is tradeable on the Grand Exchange */
+  isTradeable: boolean;
+}
+
+/**
  * All available equipment slots.
  */
 export const EQUIPMENT_SLOTS: EquipmentSlot[] = [
