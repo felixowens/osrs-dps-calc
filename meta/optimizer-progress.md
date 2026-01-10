@@ -1083,3 +1083,48 @@ This file tracks the progress of the gear optimizer implementation.
 - The comparison is recalculated whenever player, monster, or owned items change (via useMemo)
 
 **Next feature to work on:** data-004 or filter-005 (skill requirements) or other medium-priority features
+
+---
+
+## 2026-01-10 (int-001, int-002)
+
+**Features verified and marked complete:**
+- int-001 - Optimizer uses current monster selection
+- int-002 - Optimizer uses current player stats
+
+**Verification summary:**
+
+These integration features were already working but not marked as complete. The data flow was verified:
+
+1. **OptimizerModal** passes `store.player` and `store.monster` to the worker (lines 90-91)
+2. **Worker** extracts player and monster from the request data (worker.ts line 119-120)
+3. **optimizeLoadout()** receives the full player and monster objects
+4. **PlayerVsNPCCalc** uses all player/monster data for DPS calculations
+
+**int-001 verification (monster selection):**
+- ✅ `store.monster` from main UI is passed to optimizer
+- ✅ Monster defensive stats are used in `PlayerVsNPCCalc.getNPCDefenceRoll()`
+- ✅ Monster attributes (undead, demon, etc.) affect damage calculations via bonuses like salve amulet, slayer helm, etc.
+
+**int-002 verification (player stats):**
+- ✅ `store.player` is passed to optimizer with all properties preserved
+- ✅ `player.skills` (base skill levels) preserved via spread operator
+- ✅ `player.boosts` (potion boosts) preserved
+- ✅ `player.prayers` (prayer array) preserved
+- ✅ `player.buffs` (including `onSlayerTask`, potions, etc.) preserved
+
+The optimizer's `createPlayerWithEquipment()` function uses `{ ...player }` which preserves all player properties. The DPS calculator (`PlayerVsNPCCalc`) naturally uses all these properties for accurate damage calculations.
+
+**Files changed:**
+- `meta/optimizer-features.json` (modified - marked int-001 and int-002 as passing)
+- `meta/optimizer-progress.md` (modified - added this entry)
+
+**Commit:** (pending)
+
+**Notes for next agent:**
+- The remaining high-priority integration feature is int-004 (optimizer state integrates with main app state)
+- int-003 (slayer task setting) should also be working since `player.buffs.onSlayerTask` is preserved, but needs verification
+- Medium-priority features like skill requirements (data-004, filter-005) are the next logical targets
+- Consider implementing opt-009 (different objectives) since the UI already has an objective selector
+
+**Next feature to work on:** int-003 (slayer task) or data-004 (skill requirements) or opt-009 (different objectives)

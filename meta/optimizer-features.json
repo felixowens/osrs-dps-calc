@@ -472,7 +472,7 @@
         "Monster defensive stats affect optimization",
         "Monster attributes (undead, demon, etc.) are considered"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
@@ -484,7 +484,7 @@
         "Prayer selection is considered",
         "Potion boosts are considered"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
