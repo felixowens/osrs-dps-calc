@@ -665,3 +665,46 @@ This file tracks the progress of the gear optimizer implementation.
 - ui-004 (combat style selector) is the next logical step
 
 **Next feature to work on:** ui-004 - User can select combat style to optimize
+
+---
+
+## 2026-01-10 (ui-004)
+
+**Feature completed:** ui-004 - User can select combat style to optimize
+
+**What was implemented:**
+- Created `CombatStyleSelector` component (`src/app/components/optimizer/CombatStyleSelector.tsx`):
+  - Toggle button group for melee/ranged/magic selection
+  - Uses colored highlighting: red for melee, green for ranged, blue for magic
+  - Uses `aria-pressed` for accessibility
+  - Clean button styling that matches the dark theme
+- Added `getCombatStyleFromType()` helper function:
+  - Converts player's style.type (stab/slash/crush/ranged/magic) to optimizer CombatStyle (melee/ranged/magic)
+  - Maps stab, slash, crush -> 'melee'
+  - Keeps ranged and magic as-is
+  - Defaults to 'melee' for null or unknown types
+- Updated `OptimizerModal` to include combat style selection:
+  - Uses store to access current player's combat style for default
+  - Combat style state initialized from player's loadout style
+  - CombatStyleSelector placed above budget input in the settings
+
+**Verification:**
+- ESLint passes with no errors
+- Production build succeeds
+- All 173 Optimizer tests pass
+- Combat style selector displays correctly with three toggle buttons
+
+**Files changed:**
+- `src/app/components/optimizer/CombatStyleSelector.tsx` (new)
+- `src/app/components/optimizer/OptimizerModal.tsx` (modified)
+
+**Commit:** 505939b6
+
+**Notes for next agent:**
+- Combat style state is local to the modal (useState), like budget
+- The `getCombatStyleFromType()` function is exported for potential reuse elsewhere
+- The selection will affect `optimizeLoadout()` when the Optimize button is wired up
+- Consider moving combat style state to global store when implementing int-004
+- ui-005 (optimization objective selector) is the next UI feature
+
+**Next feature to work on:** ui-005 - User can select optimization objective

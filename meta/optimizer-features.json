@@ -339,7 +339,7 @@
         "Selection affects which items are considered",
         "Default matches current loadout style"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
