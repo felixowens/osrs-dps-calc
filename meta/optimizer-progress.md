@@ -398,3 +398,56 @@ This file tracks the progress of the gear optimizer implementation.
 - All filtering functions now complete: slot (filter-001), combat style (filter-002), budget (filter-003), blacklist (filter-004)
 
 **Next feature to work on:** opt-008 - Optimizer respects total budget constraint (Phase 2)
+
+---
+
+## 2026-01-10 (continued)
+
+**Feature completed:** opt-008 - Optimizer respects total budget constraint
+
+**What was implemented:**
+- Added `calculateLoadoutCost(equipment, ownedItems?)` function to `src/lib/Optimizer.ts`:
+  - Calculates total cost of a loadout by summing equipment prices
+  - Returns both total cost and per-slot cost breakdown
+  - Owned items contribute 0 to cost (free to user)
+  - Untradeable items contribute 0 to cost
+  - Unknown prices treated as 0 to avoid blocking optimization
+
+- Added budget constraint handling to `optimizeLoadout()`:
+  - After initial greedy optimization, calculates total cost
+  - If over budget, calls `applyBudgetConstraint()` to iteratively downgrade
+  - Now returns actual cost information in the result (previously stubbed as 0)
+
+- Added internal helper functions:
+  - `findCheaperAlternativeForSlot()` - Finds best item for a slot under a price threshold
+  - `applyBudgetConstraint()` - Iteratively downgrades slots until within budget
+  - Uses efficiency metric (cost saved / DPS lost) to decide which slots to downgrade
+  - High efficiency = saves lots of money for little DPS loss (downgrade these first)
+
+- Added comprehensive tests (15 new tests) in `src/tests/lib/Optimizer.test.ts`:
+  - Tests for `calculateLoadoutCost` with empty loadout, owned items, untradeable, unknown prices
+  - Tests for `optimizeLoadout` with maxBudget constraint
+  - Tests for owned items not counting against budget
+  - Tests for zero budget returning only free items
+  - Tests for budget constraint combining with blacklist
+  - Edge case tests for large budgets and unknown prices
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added calculateLoadoutCost, budget constraint logic)
+- `src/tests/lib/Optimizer.test.ts` (modified - added 15 tests for opt-008)
+- `meta/optimizer-features.json` (modified - marked opt-008 as passing)
+
+**Commit:** 9b71ef23
+
+**Notes for next agent:**
+- The budget constraint uses an iterative downgrade approach:
+  1. Run greedy optimization first (gets best possible loadout)
+  2. If over budget, find all possible downgrades and their efficiency
+  3. Apply the most efficient downgrade (saves most gold per DPS lost)
+  4. Repeat until within budget or no more downgrades possible
+- This approach prioritizes keeping high-DPS-impact items (weapons) and sacrifices lower-impact slots (rings, capes) first
+- Owned items bypass all budget constraints since they're free to the user
+- Items with unknown prices are treated as free to avoid blocking optimization before price data is loaded
+- The `cost` field in `OptimizerResult` now returns actual values instead of stub 0s
+
+**Next feature to work on:** worker-001 - Optimizer runs in web worker (Phase 3)

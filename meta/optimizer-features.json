@@ -206,7 +206,7 @@
         "Owned items contribute 0 to cost",
         "If budget is tight, sacrifices lower-impact slots first"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {
