@@ -315,7 +315,7 @@
         "Modal can be closed",
         "Modal follows existing design patterns"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {

@@ -582,3 +582,46 @@ This file tracks the progress of the gear optimizer implementation.
 - Consider adding useEffect to call fetchAndLoadPrices() when page loads
 
 **Next feature to work on:** ui-002 - Optimizer settings (or continue with other UI features)
+
+---
+
+## 2026-01-10 (ui-002)
+
+**Feature completed:** ui-002 - Optimizer settings modal opens
+
+**What was implemented:**
+- Created `src/app/components/optimizer/` directory for optimizer UI components
+- Created `OptimizerModal.tsx` component:
+  - Uses the existing `Modal` component from `@/app/components/generic/Modal`
+  - Styled consistently with other modals (ShareModal pattern)
+  - Includes sparkles icon in title for visual consistency
+  - Has Cancel and Optimize buttons in footer
+  - Placeholder content explaining settings will be added in future updates
+- Updated `src/app/optimizer/page.tsx`:
+  - Added `useState` hook to manage modal open/close state
+  - Added "Open Optimizer Settings" button with sparkles icon
+  - Button styled as full-width with centered content
+  - Changed "Features coming soon" to "Features" heading
+  - Modal opens when button is clicked and closes via Cancel, X button, or clicking outside
+
+**Verification:**
+- ESLint passes with no errors
+- Production build succeeds
+- All 462 tests pass
+- Modal opens and closes correctly
+
+**Files changed:**
+- `src/app/components/optimizer/OptimizerModal.tsx` (new)
+- `src/app/optimizer/page.tsx` (modified)
+
+**Commit:** 256a74c5
+
+**Notes for next agent:**
+- The modal is now wired up with local useState (not global state)
+- The OptimizerModal is a basic shell ready for settings to be added
+- ui-003 (budget constraint) should add a budget input to the modal
+- ui-004 (combat style selector) should add style toggle to the modal
+- The modal uses the generic Modal component which handles accessibility, transitions, and close behavior
+- Consider using the store (`useStore()`) in OptimizerModal to access player/monster data
+
+**Next feature to work on:** ui-003 - User can set a budget constraint
