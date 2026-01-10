@@ -1,7 +1,7 @@
 import { EquipmentPiece, Player, PlayerEquipment } from '@/types/Player';
 import { Monster } from '@/types/Monster';
 import {
-  CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation,
+  CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation, ItemPrice,
   OptimizerConstraints, OptimizerResult, SlotOptimizationResult,
 } from '@/types/Optimizer';
 import {
@@ -47,6 +47,187 @@ function hasMagicBonuses(item: EquipmentPiece): boolean {
  */
 function hasAnyOffensiveBonuses(item: EquipmentPiece): boolean {
   return hasMeleeBonuses(item) || hasRangedBonuses(item) || hasMagicBonuses(item);
+}
+
+// ============================================================================
+// Price Store
+// ============================================================================
+
+/**
+ * In-memory store for item prices.
+ * Maps item ID to ItemPrice info.
+ *
+ * This store can be populated by:
+ * - data-001: Price data from GE API
+ * - Manual price entries
+ * - Batch loading from a prices file
+ */
+const priceStore: Map<number, ItemPrice> = new Map();
+
+/**
+ * Set the price for an item.
+ *
+ * @param itemId - The item's ID
+ * @param price - The price in GP (or null if unknown)
+ * @param isTradeable - Whether the item is tradeable (default: true if price is set)
+ */
+export function setItemPrice(itemId: number, price: number | null, isTradeable: boolean = price !== null): void {
+  priceStore.set(itemId, { price, isTradeable });
+}
+
+/**
+ * Set prices for multiple items at once.
+ *
+ * @param prices - Record mapping item IDs to prices
+ * @param isTradeable - Whether these items are tradeable (default: true)
+ */
+export function setItemPrices(prices: Record<number, number | null>, isTradeable: boolean = true): void {
+  for (const [id, price] of Object.entries(prices)) {
+    priceStore.set(Number(id), { price, isTradeable });
+  }
+}
+
+/**
+ * Mark an item as untradeable.
+ * Untradeable items have no price (null) and cannot be bought on GE.
+ *
+ * @param itemId - The item's ID
+ */
+export function setItemUntradeable(itemId: number): void {
+  priceStore.set(itemId, { price: null, isTradeable: false });
+}
+
+/**
+ * Clear all stored prices.
+ * Useful for refreshing price data or testing.
+ */
+export function clearPriceStore(): void {
+  priceStore.clear();
+}
+
+/**
+ * Get the price info for an item.
+ *
+ * @param itemId - The item's ID
+ * @returns ItemPrice info, or undefined if no price data exists
+ */
+export function getItemPriceInfo(itemId: number): ItemPrice | undefined {
+  return priceStore.get(itemId);
+}
+
+/**
+ * Get the price of an item.
+ *
+ * Returns:
+ * - The stored price if available
+ * - 0 if item is untradeable
+ * - null if price is unknown
+ *
+ * @param itemId - The item's ID
+ * @returns Price in GP, 0 for untradeable items, or null if unknown
+ */
+export function getItemPrice(itemId: number): number | null {
+  const info = priceStore.get(itemId);
+  if (!info) {
+    return null; // No price data available
+  }
+  if (!info.isTradeable) {
+    return 0; // Untradeable items are effectively free
+  }
+  return info.price;
+}
+
+/**
+ * Get the effective price of an item considering ownership.
+ *
+ * If the item is owned, the effective price is 0 (already have it).
+ * Otherwise, returns the item's price from the price store.
+ *
+ * @param itemId - The item's ID
+ * @param ownedItems - Optional set of owned item IDs
+ * @returns Effective price in GP, 0 for owned/untradeable, or null if unknown
+ */
+export function getEffectivePrice(itemId: number, ownedItems?: Set<number>): number | null {
+  // Owned items are free
+  if (ownedItems?.has(itemId)) {
+    return 0;
+  }
+  return getItemPrice(itemId);
+}
+
+/**
+ * Check if an item is within budget.
+ *
+ * An item is within budget if:
+ * - It's owned (effective price = 0)
+ * - It's untradeable (effective price = 0)
+ * - Its price is <= maxBudget
+ * - Its price is unknown (we include unknown prices by default to avoid
+ *   excluding items before price data is loaded)
+ *
+ * @param itemId - The item's ID
+ * @param maxBudget - Maximum budget in GP
+ * @param ownedItems - Optional set of owned item IDs
+ * @param excludeUnknownPrices - If true, exclude items with unknown prices (default: false)
+ * @returns True if the item is within budget
+ */
+export function isItemWithinBudget(
+  itemId: number,
+  maxBudget: number,
+  ownedItems?: Set<number>,
+  excludeUnknownPrices: boolean = false,
+): boolean {
+  const effectivePrice = getEffectivePrice(itemId, ownedItems);
+
+  // If price is unknown
+  if (effectivePrice === null) {
+    // Include by default unless explicitly excluding unknown prices
+    return !excludeUnknownPrices;
+  }
+
+  // Check if within budget
+  return effectivePrice <= maxBudget;
+}
+
+// ============================================================================
+// Budget Filtering
+// ============================================================================
+
+/**
+ * Filter equipment by budget.
+ *
+ * Returns only items that are at or below the specified max price.
+ *
+ * Filtering rules:
+ * - Owned items are considered free (price = 0, always included if <= maxBudget)
+ * - Untradeable items are considered free (price = 0, always included if <= maxBudget)
+ * - Items with known prices are filtered by their price
+ * - Items with unknown prices are included by default (to avoid excluding
+ *   items before price data is loaded), unless excludeUnknownPrices is true
+ *
+ * @param maxBudget - Maximum price per item in GP
+ * @param equipment - Optional array of equipment to filter. Defaults to all available equipment.
+ * @param ownedItems - Optional set of owned item IDs (owned items are free)
+ * @param excludeUnknownPrices - If true, exclude items with unknown prices (default: false)
+ * @returns Array of equipment pieces within the budget
+ *
+ * @example
+ * ```typescript
+ * // Get all items under 1M GP
+ * const affordableItems = filterByBudget(1_000_000);
+ *
+ * // Get items under 1M GP, but owned items are free
+ * const ownedIds = new Set([4151, 12877]); // Whip, Rapier
+ * const affordable = filterByBudget(1_000_000, availableEquipment, ownedIds);
+ * ```
+ */
+export function filterByBudget(
+  maxBudget: number,
+  equipment: EquipmentPiece[] = availableEquipment,
+  ownedItems?: Set<number>,
+  excludeUnknownPrices: boolean = false,
+): EquipmentPiece[] {
+  return equipment.filter((item) => isItemWithinBudget(item.id, maxBudget, ownedItems, excludeUnknownPrices));
 }
 
 /**
