@@ -313,3 +313,50 @@ This file tracks the progress of the gear optimizer implementation.
 - Phase 1 core algorithm features are now complete
 
 **Next feature to work on:** filter-003 - Equipment can be filtered by budget (Phase 2)
+
+---
+
+## 2026-01-10
+
+**Feature completed:** filter-003 - Equipment can be filtered by budget
+
+**What was implemented:**
+- Added `ItemPrice` interface to `src/types/Optimizer.ts` with price and isTradeable fields
+- Created in-memory price store in `src/lib/Optimizer.ts`:
+  - `setItemPrice(itemId, price, isTradeable?)` - Set price for single item
+  - `setItemPrices(prices, isTradeable?)` - Set prices for multiple items
+  - `setItemUntradeable(itemId)` - Mark item as untradeable
+  - `clearPriceStore()` - Clear all stored prices
+  - `getItemPriceInfo(itemId)` - Get full price info
+  - `getItemPrice(itemId)` - Get price (0 for untradeable, null for unknown)
+  - `getEffectivePrice(itemId, ownedItems?)` - Get price considering ownership
+  - `isItemWithinBudget(itemId, maxBudget, ownedItems?, excludeUnknownPrices?)` - Check if within budget
+- Added `filterByBudget(maxBudget, equipment?, ownedItems?, excludeUnknownPrices?)` function:
+  - Filters items by max price
+  - Owned items are considered free (price = 0)
+  - Untradeable items are considered free (price = 0)
+  - Items with unknown prices are included by default (avoids excluding items before price data is loaded)
+  - Can chain with other filters (slot, combat style)
+- Added comprehensive tests (35 new tests):
+  - Tests for all price store functions
+  - Tests for budget filtering with owned items
+  - Tests for untradeable items
+  - Tests for unknown prices handling
+  - Tests for edge cases (zero budget, large budgets)
+
+**Files changed:**
+- `src/types/Optimizer.ts` (modified - added ItemPrice interface)
+- `src/lib/Optimizer.ts` (modified - added price store and filterByBudget)
+- `src/tests/lib/Optimizer.test.ts` (modified - added 35 tests for filter-003)
+- `meta/optimizer-features.json` (modified - marked filter-003 as passing)
+
+**Commit:** e512637
+
+**Notes for next agent:**
+- The price store is currently in-memory only - prices need to be loaded from an external source
+- data-001 (price data from GE API) will populate the price store
+- The `filterByBudget` function can be chained with other filters: `filterByBudget(1000000, filterBySlot('weapon'))`
+- By default, items with unknown prices are INCLUDED to avoid blocking optimization before prices are loaded
+- Set `excludeUnknownPrices: true` to exclude items without price data
+
+**Next feature to work on:** filter-004 - Equipment can be filtered by blacklist
