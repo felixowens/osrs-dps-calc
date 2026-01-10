@@ -615,6 +615,22 @@ export function countBySlot(
 }
 
 /**
+ * Filter out weapons with invalid attack speeds.
+ *
+ * Some weapons in the equipment database have invalid attack speeds (0 or negative),
+ * typically quest items, crates, or other non-combat items. These would cause
+ * incorrect DPS calculations (division by zero or negative DPS).
+ *
+ * Valid attack speeds are positive integers (typically 2-7 ticks).
+ *
+ * @param weapons - Array of weapon equipment pieces to filter
+ * @returns Array of weapons with valid attack speeds (speed > 0)
+ */
+export function filterValidWeapons(weapons: EquipmentPiece[]): EquipmentPiece[] {
+  return weapons.filter((weapon) => weapon.speed > 0);
+}
+
+/**
  * Create a copy of the player with different equipment in a specific slot.
  *
  * This creates a shallow copy of the player object with updated equipment
@@ -1350,7 +1366,8 @@ export function optimizeLoadout(
   };
 
   // Step 1: Optimize weapon+shield together (handles 2H vs 1H+shield comparison)
-  const weaponCandidates = candidatesBySlot.weapon;
+  // Filter out weapons with invalid attack speeds (quest items, crates, etc.)
+  const weaponCandidates = filterValidWeapons(candidatesBySlot.weapon);
   const shieldCandidates = candidatesBySlot.shield;
 
   const weaponShieldResult = findBestWeaponShieldCombination(

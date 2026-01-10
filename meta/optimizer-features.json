@@ -456,12 +456,12 @@
       "description": "User can see optimized gear with tooltips and link to item page",
       "steps": [
         "Each item in the optimized loadout has a tooltip with item name, stats, and price",
-        "Stats also include things like attack speed, attack range, etc.",
+        "Stats also include things like attack speed, attack range, etc. depending on the item type.",
         "Each item has a link to the item page in the GE database",
         "Tooltips and links are visible on hover"
       ],
-      "passes": true,
-      "priority": "high"
+      "passes": false,
+      "priority": "medium"
     },
     {
       "id": "int-001",

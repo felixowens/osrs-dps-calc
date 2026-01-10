@@ -5,6 +5,7 @@ import {
   filterBySlot, filterByCombatStyle, evaluateItem, evaluateItemDelta, calculateDps, createPlayerWithEquipment,
   findBestItemForSlot, optimizeLoadout,
   isTwoHandedWeapon, filterOneHandedWeapons, filterTwoHandedWeapons, findBestWeaponShieldCombination,
+  filterValidWeapons,
   weaponRequiresAmmo, isAmmoValidForWeapon, filterValidAmmoForWeapon, findBestAmmoForWeapon,
   // Price store functions
   setItemPrice, setItemPrices, setItemUntradeable, clearPriceStore,
@@ -868,6 +869,73 @@ describe('Optimizer', () => {
 
         expect(twoHanded).toContain(godsword);
         expect(twoHanded).not.toContain(abyssalWhip);
+      });
+    });
+
+    describe('filterValidWeapons', () => {
+      test('filters out weapons with zero attack speed', () => {
+        // Create mock weapons with invalid speeds
+        const mockWeapons = [
+          { ...abyssalWhip, speed: 0 },
+          { ...abyssalWhip, speed: 4 },
+          { ...godsword, speed: -1 },
+          { ...godsword, speed: 6 },
+        ];
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const valid = filterValidWeapons(mockWeapons as any);
+
+        expect(valid.length).toBe(2);
+        expect(valid.every((w) => w.speed > 0)).toBe(true);
+      });
+
+      test('filters out weapons with negative attack speed', () => {
+        const mockWeapons = [
+          { ...abyssalWhip, speed: -1 },
+          { ...abyssalWhip, speed: 4 },
+        ];
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const valid = filterValidWeapons(mockWeapons as any);
+
+        expect(valid.length).toBe(1);
+        expect(valid[0].speed).toBe(4);
+      });
+
+      test('keeps all valid weapons', () => {
+        const validWeapons = [
+          { ...abyssalWhip, speed: 4 },
+          { ...godsword, speed: 6 },
+        ];
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = filterValidWeapons(validWeapons as any);
+
+        expect(result.length).toBe(2);
+      });
+
+      test('returns empty array when all weapons are invalid', () => {
+        const invalidWeapons = [
+          { ...abyssalWhip, speed: 0 },
+          { ...godsword, speed: -1 },
+        ];
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = filterValidWeapons(invalidWeapons as any);
+
+        expect(result.length).toBe(0);
+      });
+
+      test('real equipment data contains weapons with valid speeds', () => {
+        const allWeapons = filterBySlot('weapon');
+        const validWeapons = filterValidWeapons(allWeapons);
+
+        // Should have many valid weapons
+        expect(validWeapons.length).toBeGreaterThan(100);
+        // Should have filtered out some invalid ones
+        expect(validWeapons.length).toBeLessThan(allWeapons.length);
+        // All remaining weapons should have valid speed
+        expect(validWeapons.every((w) => w.speed > 0)).toBe(true);
       });
     });
 
