@@ -1034,3 +1034,52 @@ This file tracks the progress of the gear optimizer implementation.
 - The fix ensures only real weapons with valid attack speeds are considered
 
 **Next feature to work on:** ui-011 - Results show comparison to current loadout (medium priority)
+
+---
+
+## 2026-01-10 (ui-011)
+
+**Feature completed:** ui-011 - Results show comparison to current loadout
+
+**What was implemented:**
+- Added `ComparisonData` interface to `OptimizerResults.tsx`:
+  - Contains currentDps, currentAccuracy, currentMaxHit, currentCost, currentEquipment
+  - Passed from OptimizerModal to OptimizerResults for comparison display
+- Added `DifferenceDisplay` component for showing metric differences:
+  - Shows positive/negative changes with color coding (green/red)
+  - Supports percentage display for DPS (e.g., +0.5 (+15%))
+  - Used for DPS, accuracy, max hit, and cost differences
+- Added `hasSlotChanged` helper function to detect equipment changes:
+  - Compares item IDs between optimized and current equipment
+  - Returns true if slot is different (including empty/non-empty transitions)
+- Updated `ResultSlot` component to highlight changed slots:
+  - Changed slots get green border (border-2 border-green-500)
+  - Unchanged slots keep default border
+- Updated `ResultsEquipmentGrid` to pass currentEquipment for comparison
+- Added "Changed slots" legend indicator below the equipment grid header
+- Updated `OptimizerModal` to calculate and pass comparison data:
+  - Uses `PlayerVsNPCCalc` to get current DPS, accuracy, max hit
+  - Uses `calculateLoadoutCost` to get current equipment cost
+  - Memoized to avoid recalculating on every render
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript type checking passes
+- All 178 Optimizer tests pass
+- Production build succeeds
+
+**Files changed:**
+- `src/app/components/optimizer/OptimizerResults.tsx` (modified - added comparison display)
+- `src/app/components/optimizer/OptimizerModal.tsx` (modified - added comparison calculation)
+- `meta/optimizer-features.json` (modified - marked ui-011 as passing)
+
+**Commit:** d167084c
+
+**Notes for next agent:**
+- The comparison is calculated using the same methods as the optimizer (PlayerVsNPCCalc)
+- Cost comparison uses owned items from the modal state for accurate "cost to buy" calculation
+- The green border on changed slots is subtle but noticeable
+- If no changes exist between optimized and current gear, no slots will be highlighted
+- The comparison is recalculated whenever player, monster, or owned items change (via useMemo)
+
+**Next feature to work on:** data-004 or filter-005 (skill requirements) or other medium-priority features

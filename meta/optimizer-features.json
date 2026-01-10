@@ -423,7 +423,7 @@
         "Cost difference is shown",
         "Per-slot changes are highlighted"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {
