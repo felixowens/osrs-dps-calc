@@ -999,3 +999,38 @@ This file tracks the progress of the gear optimizer implementation.
 - Zero-value stats are hidden for cleaner display
 
 **Next feature to work on:** ui-011 - Results show comparison to current loadout (medium priority)
+
+---
+
+## 2026-01-10 (bug fix)
+
+**Bug fixed:** Weapons with invalid attack speeds selected as "best"
+
+**Issue:**
+- User reported "Crate with zanik" being selected as the best weapon
+- Investigation found 401 weapons in the equipment database with speed <= 0
+- These invalid speeds (especially -1) caused division issues in DPS calculation
+- Items like quest crates, greegrees, etc. have placeholder speed values
+
+**What was implemented:**
+- Added `filterValidWeapons(weapons)` function to filter out weapons with speed <= 0
+- Applied filter to weapon candidates in `optimizeLoadout()` before optimization
+- Added 5 new tests for the filterValidWeapons function:
+  - Filters out zero attack speed
+  - Filters out negative attack speed
+  - Keeps valid weapons
+  - Returns empty array when all invalid
+  - Verifies real equipment data filtering
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (modified - added filterValidWeapons, applied in optimizeLoadout)
+- `src/tests/lib/Optimizer.test.ts` (modified - added tests for filterValidWeapons)
+
+**Commit:** d460ce8c
+
+**Notes:**
+- 401 weapons in equipment.json have invalid speeds (0 or negative)
+- These are typically quest items, crates, greegrees, or other non-combat items
+- The fix ensures only real weapons with valid attack speeds are considered
+
+**Next feature to work on:** ui-011 - Results show comparison to current loadout (medium priority)
