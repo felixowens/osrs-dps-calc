@@ -13,6 +13,8 @@ import { NPCVsPlayerCalculatedLoadout, PlayerVsNPCCalculatedLoadout } from '@/ty
 import NPCVsPlayerCalc from '@/lib/NPCVsPlayerCalc';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 import Comparator from '@/lib/Comparator';
+import { optimizeLoadout } from '@/lib/Optimizer';
+import { OptimizerConstraints } from '@/types/Optimizer';
 import { ttkDist } from '@/worker/ttkWorker';
 import { range } from 'd3-array';
 import { DeferredPromise } from '@/utils';
@@ -105,6 +107,51 @@ const compare: Handler<WorkerRequestType.COMPARE> = async (data) => {
     },
     domainMax,
   };
+};
+
+/**
+ * Runs the gear optimizer in the web worker to avoid blocking the main UI thread.
+ *
+ * Note: Constraints with Set types (blacklistedItems, ownedItems) are serialized
+ * as arrays when sent to the worker, so we need to convert them back to Sets here.
+ */
+const optimize: Handler<WorkerRequestType.OPTIMIZE> = async (data) => {
+  const {
+    player, monster, combatStyle, constraints: rawConstraints,
+  } = data;
+
+  // Convert array-serialized constraints back to Sets
+  // (Sets cannot be serialized to JSON, so they come through as arrays)
+  let constraints: OptimizerConstraints | undefined;
+  if (rawConstraints) {
+    constraints = { ...rawConstraints };
+
+    // Convert blacklistedItems array to Set
+    if (rawConstraints.blacklistedItems) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blacklist = rawConstraints.blacklistedItems as any;
+      if (Array.isArray(blacklist)) {
+        constraints.blacklistedItems = new Set(blacklist);
+      }
+    }
+
+    // Convert ownedItems array to Set
+    if (rawConstraints.ownedItems) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const owned = rawConstraints.ownedItems as any;
+      if (Array.isArray(owned)) {
+        constraints.ownedItems = new Set(owned);
+      }
+    }
+  }
+
+  const start = self.performance.now();
+  const result = optimizeLoadout(player, monster, { combatStyle, constraints });
+  const end = self.performance.now();
+
+  console.debug(`Optimization took ${end - start}ms, ${result.meta.evaluations} evaluations`);
+
+  return result;
 };
 
 // workers that compute a single ttk dist and then terminate
@@ -242,6 +289,11 @@ self.onmessage = async (evt: MessageEvent<string>) => {
 
       case WorkerRequestType.COMPUTE_TTK_PARALLEL: {
         res.payload = await ttkDistParallel(data, req);
+        break;
+      }
+
+      case WorkerRequestType.OPTIMIZE: {
+        res.payload = await optimize(data, req);
         break;
       }
 

@@ -5,6 +5,7 @@ import { CalcOpts } from '@/lib/BaseCalc';
 import {
   CompareResult, CompareXAxis, CompareYAxis,
 } from '@/lib/Comparator';
+import { CombatStyle, OptimizerConstraints, OptimizerResult } from '@/types/Optimizer';
 
 /**
  * Requests
@@ -16,6 +17,7 @@ export enum WorkerRequestType {
   COMPUTE_TTK_PARALLEL,
   COMPUTE_TTK,
   COMPARE,
+  OPTIMIZE,
 }
 
 export interface WorkerRequest<T extends WorkerRequestType> {
@@ -68,12 +70,26 @@ export interface TtkRequestParallel extends WorkerRequest<WorkerRequestType.COMP
   data: TtkRequest['data']
 }
 
+export interface OptimizeRequest extends WorkerRequest<WorkerRequestType.OPTIMIZE> {
+  data: {
+    /** Base player to optimize from (provides skills, prayers, style context) */
+    player: Player,
+    /** Monster to optimize against */
+    monster: Monster,
+    /** Combat style to optimize for */
+    combatStyle?: CombatStyle,
+    /** Constraints for the optimization */
+    constraints?: OptimizerConstraints,
+  }
+}
+
 export type CalcRequestsUnion =
   ComputeBasicRequest |
   ComputeReverseRequest |
   CompareRequest |
   TtkRequest |
-  TtkRequestParallel;
+  TtkRequestParallel |
+  OptimizeRequest;
 
 /**
  * Responses
@@ -106,21 +122,32 @@ export interface TtkResponseParallel extends WorkerResponse<WorkerRequestType.CO
   payload: TtkResponse['payload'],
 }
 
+export interface OptimizeResponse extends WorkerResponse<WorkerRequestType.OPTIMIZE> {
+  payload: OptimizerResult,
+}
+
 export type CalcResponsesUnion =
   ComputeBasicResponse |
   ComputeReverseResponse |
   CompareResponse |
   TtkResponse |
-  TtkResponseParallel;
+  TtkResponseParallel |
+  OptimizeResponse;
 export type CalcResponse<T extends WorkerRequestType> = CalcResponsesUnion & { type: T };
 
 export type Handler<T extends WorkerRequestType> = (data: Extract<CalcRequestsUnion, { type: T }>['data'], rawRequest: CalcRequestsUnion) => Promise<CalcResponse<T>['payload']>;
 
-export const WORKER_JSON_REPLACER = (k: string, v: Map<unknown, unknown> | never) => {
+export const WORKER_JSON_REPLACER = (k: string, v: Map<unknown, unknown> | Set<unknown> | never) => {
   if (v instanceof Map) {
     return {
       _dataType: 'Map',
       m: Array.from(v),
+    };
+  }
+  if (v instanceof Set) {
+    return {
+      _dataType: 'Set',
+      s: Array.from(v),
     };
   }
   return v;
@@ -130,6 +157,9 @@ export const WORKER_JSON_REPLACER = (k: string, v: Map<unknown, unknown> | never
 export const WORKER_JSON_REVIVER = (k: string, v: any) => {
   if (typeof v === 'object' && v?._dataType === 'Map') {
     return new Map(v.m);
+  }
+  if (typeof v === 'object' && v?._dataType === 'Set') {
+    return new Set(v.s);
   }
   return v;
 };
