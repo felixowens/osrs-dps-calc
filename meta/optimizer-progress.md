@@ -708,3 +708,45 @@ This file tracks the progress of the gear optimizer implementation.
 - ui-005 (optimization objective selector) is the next UI feature
 
 **Next feature to work on:** ui-005 - User can select optimization objective
+
+---
+
+## 2026-01-10 (ui-005)
+
+**Feature completed:** ui-005 - User can select optimization objective
+
+**What was implemented:**
+- Created `ObjectiveSelector` component (`src/app/components/optimizer/ObjectiveSelector.tsx`):
+  - Toggle button group for DPS/Accuracy/Max Hit selection
+  - Uses yellow highlighting for selected option (distinct from combat style colors)
+  - Displays description for selected objective below the buttons
+  - Uses `aria-pressed` for accessibility
+- Updated `OptimizerModal` to include optimization objective selection:
+  - Added objective state with 'dps' as default
+  - ObjectiveSelector placed between combat style and budget inputs
+  - Imported `OptimizationObjective` type from `@/types/Optimizer`
+- Fixed TypeScript errors in `Optimizer.test.ts`:
+  - Updated jest mock typing from `global.fetch = jest.fn()` to use `(global as any).fetch = jest.fn<any>()`
+  - Added eslint-disable comments for `@typescript-eslint/no-explicit-any`
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript check passes
+- Production build succeeds
+- All 173 Optimizer tests pass
+
+**Files changed:**
+- `src/app/components/optimizer/ObjectiveSelector.tsx` (new)
+- `src/app/components/optimizer/OptimizerModal.tsx` (modified)
+- `src/tests/lib/Optimizer.test.ts` (modified - TypeScript fixes)
+
+**Commit:** 36ca3d35
+
+**Notes for next agent:**
+- Objective state is local to the modal (useState), like budget and combat style
+- The `OptimizationObjective` type is already defined in `src/types/Optimizer.ts`
+- The selection will be passed to `optimizeLoadout()` when the Optimize button is wired up
+- opt-009 (optimize for different objectives) will implement the actual algorithm changes
+- The TypeScript fixes for jest mocking are clean now and should not cause issues
+
+**Next feature to work on:** ui-006 - User can manage owned items (or other Phase 4 UI features)
