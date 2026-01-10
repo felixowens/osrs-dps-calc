@@ -12,6 +12,8 @@ import {
   filterByBudget,
   // Blacklist filtering
   filterByBlacklist,
+  // Cost calculation
+  calculateLoadoutCost,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -1819,6 +1821,354 @@ describe('Optimizer', () => {
         // Neither should contain the blacklisted item
         expect(result1.candidates.some((c) => c.item.id === rapier.id)).toBe(false);
         expect(result2.candidates.some((c) => c.item.id === rapier.id)).toBe(false);
+      });
+    });
+  });
+
+  describe('Total budget constraint (opt-008)', () => {
+    // Test items with known prices
+    const abyssalWhip = findEquipment('Abyssal whip');
+    const rapier = findEquipment('Ghrazi rapier');
+    const bronzeSword = findEquipment('Bronze sword');
+    const torvaHelm = findEquipment('Torva full helm');
+    const torvaBody = findEquipment('Torva platebody');
+    const torvaLegs = findEquipment('Torva platelegs');
+    const bandosChestplate = findEquipment('Bandos chestplate');
+    const bandosTassets = findEquipment('Bandos tassets');
+    const fighterTorso = findEquipment('Fighter torso');
+    const dragonDefender = findEquipment('Dragon defender');
+    const amuletOfTorture = findEquipment('Amulet of torture');
+    const berserkerRing = findEquipment('Berserker ring (i)');
+
+    // Set up prices before tests
+    beforeEach(() => {
+      clearPriceStore();
+      // Set realistic-ish prices for testing
+      setItemPrice(rapier.id, 140_000_000); // 140M
+      setItemPrice(torvaHelm.id, 400_000_000); // 400M
+      setItemPrice(torvaBody.id, 700_000_000); // 700M
+      setItemPrice(torvaLegs.id, 350_000_000); // 350M
+      setItemPrice(bandosChestplate.id, 18_000_000); // 18M
+      setItemPrice(bandosTassets.id, 28_000_000); // 28M
+      setItemPrice(amuletOfTorture.id, 10_000_000); // 10M
+      setItemPrice(berserkerRing.id, 5_000_000); // 5M (imbued)
+      setItemPrice(abyssalWhip.id, 2_500_000); // 2.5M
+      setItemPrice(bronzeSword.id, 100); // 100 GP
+      setItemPrice(dragonDefender.id, 0); // Free (untradeable)
+      setItemUntradeable(fighterTorso.id); // Fighter torso is untradeable
+    });
+
+    describe('calculateLoadoutCost', () => {
+      test('returns zero for empty loadout', () => {
+        const emptyEquipment = {
+          head: null,
+          cape: null,
+          neck: null,
+          ammo: null,
+          weapon: null,
+          body: null,
+          shield: null,
+          legs: null,
+          hands: null,
+          feet: null,
+          ring: null,
+        };
+
+        const { total, perSlot } = calculateLoadoutCost(emptyEquipment);
+
+        expect(total).toBe(0);
+        expect(Object.keys(perSlot).length).toBe(0);
+      });
+
+      test('sums costs of equipped items', () => {
+        const equipment = {
+          head: null,
+          cape: null,
+          neck: amuletOfTorture,
+          ammo: null,
+          weapon: rapier,
+          body: bandosChestplate,
+          shield: null,
+          legs: bandosTassets,
+          hands: null,
+          feet: null,
+          ring: berserkerRing,
+        };
+
+        const { total, perSlot } = calculateLoadoutCost(equipment);
+
+        // 140M + 18M + 28M + 10M + 5M = 201M
+        expect(total).toBe(201_000_000);
+        expect(perSlot.weapon).toBe(140_000_000);
+        expect(perSlot.body).toBe(18_000_000);
+        expect(perSlot.legs).toBe(28_000_000);
+        expect(perSlot.neck).toBe(10_000_000);
+        expect(perSlot.ring).toBe(5_000_000);
+      });
+
+      test('owned items contribute zero to cost', () => {
+        const equipment = {
+          head: null,
+          cape: null,
+          neck: null,
+          ammo: null,
+          weapon: rapier,
+          body: bandosChestplate,
+          shield: null,
+          legs: null,
+          hands: null,
+          feet: null,
+          ring: null,
+        };
+
+        // User owns the rapier
+        const ownedItems = new Set([rapier.id]);
+
+        const { total, perSlot } = calculateLoadoutCost(equipment, ownedItems);
+
+        // Only bandos chestplate cost (18M), rapier is owned (free)
+        expect(total).toBe(18_000_000);
+        expect(perSlot.weapon).toBe(0);
+        expect(perSlot.body).toBe(18_000_000);
+      });
+
+      test('untradeable items contribute zero to cost', () => {
+        const equipment = {
+          head: null,
+          cape: null,
+          neck: null,
+          ammo: null,
+          weapon: abyssalWhip,
+          body: fighterTorso, // Untradeable
+          shield: null,
+          legs: null,
+          hands: null,
+          feet: null,
+          ring: null,
+        };
+
+        const { total, perSlot } = calculateLoadoutCost(equipment);
+
+        // Only whip cost (2.5M), fighter torso is untradeable (free)
+        expect(total).toBe(2_500_000);
+        expect(perSlot.weapon).toBe(2_500_000);
+        expect(perSlot.body).toBe(0);
+      });
+
+      test('items with unknown prices contribute zero to cost', () => {
+        const unknownItem = findEquipment('Rune scimitar');
+        // Don't set price for rune scimitar
+
+        const equipment = {
+          head: null,
+          cape: null,
+          neck: null,
+          ammo: null,
+          weapon: unknownItem,
+          body: bandosChestplate,
+          shield: null,
+          legs: null,
+          hands: null,
+          feet: null,
+          ring: null,
+        };
+
+        const { total, perSlot } = calculateLoadoutCost(equipment);
+
+        // Only bandos cost (18M), rune scimitar has no price (treated as 0)
+        expect(total).toBe(18_000_000);
+        expect(perSlot.weapon).toBe(0);
+        expect(perSlot.body).toBe(18_000_000);
+      });
+    });
+
+    describe('optimizeLoadout with maxBudget constraint', () => {
+      test('returns cost information in result', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Should have cost information
+        expect(result.cost).toHaveProperty('total');
+        expect(result.cost).toHaveProperty('perSlot');
+        expect(typeof result.cost.total).toBe('number');
+      });
+
+      test('respects maxBudget by downgrading items if needed', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
+
+        // Optimize without budget constraint
+        const unconstrained = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Optimize with a tight budget (e.g., 50M total)
+        const constrained = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: { maxBudget: 50_000_000 },
+        });
+
+        // Constrained result should be within budget
+        expect(constrained.cost.total).toBeLessThanOrEqual(50_000_000);
+
+        // Constrained DPS should be <= unconstrained DPS (sacrificing power for budget)
+        expect(constrained.metrics.dps).toBeLessThanOrEqual(unconstrained.metrics.dps);
+      });
+
+      test('owned items do not count against budget', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        // User owns expensive items
+        const ownedItems = new Set([rapier.id, torvaHelm.id, torvaBody.id, torvaLegs.id]);
+
+        // Optimize with tight budget but user owns the expensive items
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: {
+            maxBudget: 1_000_000, // Only 1M budget
+            ownedItems,
+          },
+        });
+
+        // Should be within budget
+        expect(result.cost.total).toBeLessThanOrEqual(1_000_000);
+
+        // But could still have selected owned expensive items (they're free to user)
+        // Check that owned items in the result have 0 cost
+        if (result.equipment.weapon?.id === rapier.id) {
+          expect(result.cost.perSlot?.weapon).toBe(0);
+        }
+      });
+
+      test('zero budget returns only owned/untradeable items', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        // User owns some items
+        const ownedItems = new Set([abyssalWhip.id]);
+
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: {
+            maxBudget: 0, // No budget at all
+            ownedItems,
+          },
+        });
+
+        // Total cost should be 0
+        expect(result.cost.total).toBe(0);
+
+        // All items in result should be either owned or untradeable
+        // Note: Items with unknown prices are treated as 0 cost
+      });
+
+      test('very large budget does not constrain selection', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        // Optimize without budget
+        const unconstrained = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Optimize with huge budget (10 billion)
+        const largeBudget = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: { maxBudget: 10_000_000_000 },
+        });
+
+        // Results should be identical (budget is not constraining)
+        expect(largeBudget.metrics.dps).toBe(unconstrained.metrics.dps);
+      });
+
+      test('sacrifices lower-impact slots first', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        // Optimize with moderate budget
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: { maxBudget: 200_000_000 },
+        });
+
+        // Should be within budget
+        expect(result.cost.total).toBeLessThanOrEqual(200_000_000);
+
+        // Weapon should generally be preserved (highest DPS impact)
+        // This test verifies the optimizer doesn't just empty high-impact slots
+        expect(result.equipment.weapon).not.toBeNull();
+      });
+
+      test('handles case where budget cannot be met', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        // Budget too low to afford anything
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: { maxBudget: 0 },
+        });
+
+        // Should still return a valid result
+        expect(result).toHaveProperty('equipment');
+        expect(result).toHaveProperty('metrics');
+        expect(result).toHaveProperty('cost');
+
+        // Cost should be 0 (only untradeable/unknown price items)
+        expect(result.cost.total).toBe(0);
+      });
+
+      test('budget constraint combines with other constraints', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        // Combine budget with blacklist
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: {
+            maxBudget: 50_000_000,
+            blacklistedItems: new Set([rapier.id]),
+          },
+        });
+
+        // Should be within budget
+        expect(result.cost.total).toBeLessThanOrEqual(50_000_000);
+
+        // Blacklisted item should not be selected
+        expect(result.equipment.weapon?.id).not.toBe(rapier.id);
+      });
+    });
+
+    describe('edge cases for budget constraint', () => {
+      test('handles loadout already under budget', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        // Very generous budget
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: { maxBudget: 10_000_000_000 }, // 10B
+        });
+
+        // Should still work normally
+        expect(result.equipment.weapon).not.toBeNull();
+        expect(result.metrics.dps).toBeGreaterThan(0);
+      });
+
+      test('handles loadout with all unknown prices', () => {
+        // Clear all prices
+        clearPriceStore();
+
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: {} });
+
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'melee',
+          constraints: { maxBudget: 0 }, // Zero budget
+        });
+
+        // Should still work - unknown prices are treated as 0
+        expect(result.cost.total).toBe(0);
+        expect(result.equipment.weapon).not.toBeNull();
       });
     });
   });

@@ -190,6 +190,41 @@ export function isItemWithinBudget(
 }
 
 // ============================================================================
+// Cost Calculation
+// ============================================================================
+
+/**
+ * Calculate the total cost of a loadout.
+ *
+ * Sums up the effective price of all equipped items. Owned items contribute 0 to cost.
+ * Items with unknown prices are treated as 0 cost (to avoid blocking optimization).
+ *
+ * @param equipment - The equipment loadout to calculate cost for
+ * @param ownedItems - Optional set of owned item IDs (owned items are free)
+ * @returns Object with total cost and per-slot cost breakdown
+ */
+export function calculateLoadoutCost(
+  equipment: PlayerEquipment,
+  ownedItems?: Set<number>,
+): { total: number; perSlot: Partial<Record<EquipmentSlot, number>> } {
+  let total = 0;
+  const perSlot: Partial<Record<EquipmentSlot, number>> = {};
+
+  for (const slot of EQUIPMENT_SLOTS) {
+    const item = equipment[slot];
+    if (item) {
+      const price = getEffectivePrice(item.id, ownedItems);
+      // Treat unknown prices as 0 to avoid blocking
+      const cost = price ?? 0;
+      perSlot[slot] = cost;
+      total += cost;
+    }
+  }
+
+  return { total, perSlot };
+}
+
+// ============================================================================
 // Blacklist Filtering
 // ============================================================================
 
@@ -849,6 +884,175 @@ function createPlayerFromEquipment(
 }
 
 /**
+ * Information about a potential downgrade for budget fitting.
+ */
+interface DowngradeOption {
+  slot: EquipmentSlot;
+  currentItem: EquipmentPiece;
+  newItem: EquipmentPiece | null;
+  costSaved: number;
+  dpsLost: number;
+  efficiency: number; // costSaved / dpsLost (higher = better)
+}
+
+/**
+ * Find the best cheaper alternative for a slot.
+ *
+ * Given a slot and its current item, finds the highest-DPS item that costs
+ * less than the current item.
+ *
+ * @param slot - The equipment slot to find alternative for
+ * @param currentItem - The current item in the slot
+ * @param player - The player with current equipment (excluding this slot for evaluation)
+ * @param monster - The monster to optimize against
+ * @param candidates - Candidate items for this slot
+ * @param constraints - Optimizer constraints (including ownedItems for price calculation)
+ * @returns The best cheaper alternative, or null if none exists
+ */
+function findCheaperAlternativeForSlot(
+  slot: EquipmentSlot,
+  currentItem: EquipmentPiece,
+  player: Player,
+  monster: Monster,
+  candidates: EquipmentPiece[],
+  constraints?: OptimizerConstraints,
+): { item: EquipmentPiece | null; dps: number; cost: number } | null {
+  const currentCost = getEffectivePrice(currentItem.id, constraints?.ownedItems) ?? 0;
+
+  // Filter candidates to those cheaper than current item
+  const cheaperCandidates = candidates.filter((item) => {
+    if (item.id === currentItem.id) return false;
+    const itemCost = getEffectivePrice(item.id, constraints?.ownedItems) ?? 0;
+    return itemCost < currentCost;
+  });
+
+  if (cheaperCandidates.length === 0) {
+    // No cheaper alternatives - only option is to empty the slot
+    return { item: null, dps: 0, cost: 0 };
+  }
+
+  // Find the best among cheaper candidates
+  const result = findBestItemForSlot(slot, player, monster, cheaperCandidates, constraints);
+
+  if (!result.bestItem) {
+    return { item: null, dps: 0, cost: 0 };
+  }
+
+  const newCost = getEffectivePrice(result.bestItem.id, constraints?.ownedItems) ?? 0;
+  return { item: result.bestItem, dps: result.score, cost: newCost };
+}
+
+/**
+ * Apply budget constraints to an optimized loadout.
+ *
+ * If the total cost exceeds the budget, iteratively downgrades slots with
+ * the lowest DPS impact per gold saved until the loadout fits within budget.
+ *
+ * @param equipment - The initially optimized equipment
+ * @param player - Base player for DPS calculations
+ * @param monster - Target monster
+ * @param budget - Maximum total budget
+ * @param candidatesBySlot - Pre-filtered candidates grouped by slot
+ * @param constraints - Optimizer constraints
+ * @returns The budget-fitted equipment and final cost
+ */
+function applyBudgetConstraint(
+  equipment: PlayerEquipment,
+  player: Player,
+  monster: Monster,
+  budget: number,
+  candidatesBySlot: Record<EquipmentSlot, EquipmentPiece[]>,
+  constraints?: OptimizerConstraints,
+): { equipment: PlayerEquipment; cost: { total: number; perSlot: Partial<Record<EquipmentSlot, number>> } } {
+  // Create a mutable copy of the equipment
+  const adjustedEquipment: PlayerEquipment = { ...equipment };
+
+  // Calculate initial cost
+  let costInfo = calculateLoadoutCost(adjustedEquipment, constraints?.ownedItems);
+
+  // If already within budget, return as-is
+  if (costInfo.total <= budget) {
+    return { equipment: adjustedEquipment, cost: costInfo };
+  }
+
+  // Iteratively downgrade until within budget
+  const maxIterations = 100; // Safety limit
+  for (let iter = 0; iter < maxIterations && costInfo.total > budget; iter++) {
+    // Find all possible downgrades and their efficiency
+    const downgrades: DowngradeOption[] = [];
+
+    for (const slot of EQUIPMENT_SLOTS) {
+      const currentItem = adjustedEquipment[slot];
+      if (!currentItem) continue;
+
+      const currentCost = getEffectivePrice(currentItem.id, constraints?.ownedItems) ?? 0;
+      if (currentCost === 0) continue; // Can't save money on free/owned items
+
+      // Create player with current loadout (excluding this slot) for DPS evaluation
+      const playerWithLoadout = createPlayerFromEquipment(player, adjustedEquipment, monster);
+      const currentDps = calculateDps(playerWithLoadout, monster);
+
+      // Find cheaper alternative
+      const alternative = findCheaperAlternativeForSlot(
+        slot,
+        currentItem,
+        // Remove current item from slot to evaluate alternatives fairly
+        createPlayerWithEquipment(playerWithLoadout, slot, null, monster),
+        monster,
+        candidatesBySlot[slot],
+        constraints,
+      );
+
+      if (!alternative) continue;
+
+      const costSaved = currentCost - alternative.cost;
+      if (costSaved <= 0) continue;
+
+      // Calculate DPS with the alternative item
+      const playerWithAlternative = createPlayerWithEquipment(
+        playerWithLoadout,
+        slot,
+        alternative.item,
+        monster,
+      );
+      const newDps = calculateDps(playerWithAlternative, monster);
+      const dpsLost = currentDps - newDps;
+
+      // Calculate efficiency (cost saved per DPS lost)
+      // Higher efficiency = better downgrade (more money saved per DPS lost)
+      // If dpsLost is 0 or negative (somehow got better), set efficiency to infinity
+      const efficiency = dpsLost > 0 ? costSaved / dpsLost : Infinity;
+
+      downgrades.push({
+        slot,
+        currentItem,
+        newItem: alternative.item,
+        costSaved,
+        dpsLost,
+        efficiency,
+      });
+    }
+
+    if (downgrades.length === 0) {
+      // No more possible downgrades, we've done our best
+      break;
+    }
+
+    // Sort by efficiency (highest first) - prefer saving more gold per DPS lost
+    downgrades.sort((a, b) => b.efficiency - a.efficiency);
+
+    // Apply the best downgrade
+    const bestDowngrade = downgrades[0];
+    adjustedEquipment[bestDowngrade.slot] = bestDowngrade.newItem;
+
+    // Recalculate cost
+    costInfo = calculateLoadoutCost(adjustedEquipment, constraints?.ownedItems);
+  }
+
+  return { equipment: adjustedEquipment, cost: costInfo };
+}
+
+/**
  * Input options for the loadout optimizer.
  */
 export interface OptimizeLoadoutOptions {
@@ -868,7 +1072,8 @@ export interface OptimizeLoadoutOptions {
  * 4. For remaining slots:
  *    - Finds the best item using `findBestItemForSlot`
  *    - Updates the player's equipment with the best item
- * 5. Returns the complete optimized loadout with metrics
+ * 5. Applies budget constraint if specified (iteratively downgrades)
+ * 6. Returns the complete optimized loadout with metrics
  *
  * Two-handed weapon handling (opt-004):
  * - Compares best 2H weapon vs best 1H weapon + best shield
@@ -880,6 +1085,12 @@ export interface OptimizeLoadoutOptions {
  * - For bows: selects best arrow compatible with the bow
  * - For crossbows: selects best bolt compatible with the crossbow
  * - For weapons that don't need ammo (crystal bow, blowpipe): ammo slot is left empty
+ *
+ * Budget constraint handling (opt-008):
+ * - If maxBudget is specified in constraints, ensures total cost doesn't exceed budget
+ * - Owned items contribute 0 to cost
+ * - If over budget, iteratively downgrades slots with least DPS impact per gold saved
+ * - Prioritizes keeping high-impact items (weapons) and sacrifices lower-impact slots first
  *
  * The greedy approach may miss synergies (e.g., set bonuses), but provides
  * a fast baseline optimization. Set bonus handling will be added in opt-006/opt-007.
@@ -898,6 +1109,13 @@ export interface OptimizeLoadoutOptions {
  * const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
  * console.log(`Optimized DPS: ${result.metrics.dps}`);
  * console.log(`Best weapon: ${result.equipment.weapon?.name}`);
+ *
+ * // Optimize with budget constraint
+ * const budgetResult = optimizeLoadout(player, monster, {
+ *   combatStyle: 'melee',
+ *   constraints: { maxBudget: 10_000_000 },
+ * });
+ * console.log(`Budget DPS: ${budgetResult.metrics.dps}, Cost: ${budgetResult.cost.total}`);
  * ```
  */
 export function optimizeLoadout(
@@ -1006,8 +1224,26 @@ export function optimizeLoadout(
     }
   }
 
+  // Step 4: Apply budget constraint if specified
+  let finalEquipment = optimizedEquipment;
+  let costInfo = calculateLoadoutCost(optimizedEquipment, constraints?.ownedItems);
+
+  if (constraints?.maxBudget !== undefined && costInfo.total > constraints.maxBudget) {
+    // Need to fit within budget - iteratively downgrade lower-impact slots
+    const budgetResult = applyBudgetConstraint(
+      optimizedEquipment,
+      player,
+      monster,
+      constraints.maxBudget,
+      candidatesBySlot,
+      constraints,
+    );
+    finalEquipment = budgetResult.equipment;
+    costInfo = budgetResult.cost;
+  }
+
   // Calculate final metrics with the complete loadout
-  const finalPlayer = createPlayerFromEquipment(player, optimizedEquipment, monster);
+  const finalPlayer = createPlayerFromEquipment(player, finalEquipment, monster);
   const calc = new PlayerVsNPCCalc(finalPlayer, monster);
   const dps = calc.getDps();
   const accuracy = calc.getHitChance();
@@ -1016,16 +1252,13 @@ export function optimizeLoadout(
   const endTime = performance.now();
 
   return {
-    equipment: optimizedEquipment,
+    equipment: finalEquipment,
     metrics: {
       dps,
       accuracy,
       maxHit,
     },
-    cost: {
-      total: 0, // Price data not yet implemented (data-001)
-      perSlot: {}, // Price data not yet implemented (data-001)
-    },
+    cost: costInfo,
     meta: {
       evaluations: totalEvaluations,
       timeMs: endTime - startTime,
