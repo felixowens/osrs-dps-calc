@@ -5,6 +5,7 @@ import { IconSparkles } from '@tabler/icons-react';
 import BudgetInput from '@/app/components/optimizer/BudgetInput';
 import CombatStyleSelector, { getCombatStyleFromType } from '@/app/components/optimizer/CombatStyleSelector';
 import ObjectiveSelector from '@/app/components/optimizer/ObjectiveSelector';
+import OwnedItemsManager from '@/app/components/optimizer/OwnedItemsManager';
 import { CombatStyle, OptimizationObjective } from '@/types/Optimizer';
 import { useStore } from '@/state';
 
@@ -27,6 +28,9 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
 
   // Optimization objective state: defaults to DPS
   const [objective, setObjective] = useState<OptimizationObjective>('dps');
+
+  // Owned items state: Set of item IDs the user owns
+  const [ownedItems, setOwnedItems] = useState<Set<number>>(new Set());
 
   return (
     <Modal
@@ -75,8 +79,12 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
           </div>
 
           <div className="bg-dark-400 rounded p-3">
+            <OwnedItemsManager ownedItems={ownedItems} setOwnedItems={setOwnedItems} />
+          </div>
+
+          <div className="bg-dark-400 rounded p-3">
             <p className="text-gray-400 text-xs">
-              More settings coming soon: owned items, blacklist.
+              More settings coming soon: blacklist.
             </p>
           </div>
         </div>
