@@ -1172,3 +1172,64 @@ The optimizer's `createPlayerWithEquipment()` function uses `{ ...player }` whic
 - Consider implementing int-003 (slayer task verification), data-004 (skill requirements), or other medium-priority features
 
 **Next feature to work on:** int-003 (slayer task verification), data-004 (skill requirements), or worker-002 (progress reporting)
+
+---
+
+## 2026-01-10 (int-004)
+
+**Feature completed:** int-004 - Optimizer state integrates with main app state
+
+**What was implemented:**
+- Added `OptimizerSettings` interface to `src/types/State.ts`:
+  - `combatStyle`: CombatStyle ('melee' | 'ranged' | 'magic')
+  - `objective`: OptimizationObjective ('dps' | 'accuracy' | 'max_hit')
+  - `budget`: number | null (null = unlimited)
+  - `ownedItems`: number[] (array for serialization, components convert to Set)
+  - `blacklistedItems`: number[] (array for serialization, components convert to Set)
+- Added `optimizerSettings` property to GlobalState class with default values
+- Added three new methods to GlobalState:
+  - `loadOptimizerSettings()` - Loads settings from localStorage on app init
+  - `updateOptimizerSettings(settings, persist?)` - Updates state and optionally persists
+  - `resetOptimizerSettings()` - Resets to defaults
+- Settings persist to localStorage via localforage with key 'dps-calc-optimizer'
+- Updated `home.tsx` to call `loadOptimizerSettings()` on mount
+- Updated optimizer page to call `loadOptimizerSettings()` on mount (for direct navigation)
+- Updated `OptimizerModal.tsx` to use global store:
+  - Reads combatStyle, objective, budget from `store.optimizerSettings`
+  - Updates via `store.updateOptimizerSettings()` callbacks
+  - Owned/blacklisted items still use component-level persistence (already working)
+
+**Verification:**
+- TypeScript compiles without errors
+- ESLint passes with no errors
+- All 190 Optimizer tests pass
+- Production build succeeds
+- Settings now persist across modal open/close and page reloads
+
+**Files changed:**
+- `src/types/State.ts` (added OptimizerSettings interface, updated State interface)
+- `src/state.tsx` (added DEFAULT_OPTIMIZER_SETTINGS, optimizerSettings property, methods)
+- `src/app/home.tsx` (added loadOptimizerSettings() call)
+- `src/app/optimizer/page.tsx` (added loadOptimizerSettings() call)
+- `src/app/components/optimizer/OptimizerModal.tsx` (uses global store for settings)
+- `meta/optimizer-features.json` (marked int-004 as passing)
+
+**Commit:** 4551a115
+
+**Notes for next agent:**
+- The optimizer settings (combat style, objective, budget) are now stored in global MobX state
+- Settings auto-save to localStorage whenever they change
+- Owned items and blacklisted items use separate localStorage keys managed by their components
+- The two systems coexist: global state for core settings, component state for item lists
+- All high-priority features are now complete
+- Remaining medium-priority features:
+  - int-003: Optimizer respects slayer task setting (may already work, needs verification)
+  - data-004: Equipment skill requirements are accessible
+  - filter-005: Equipment can be filtered by skill requirements
+  - ui-008: User can toggle skill requirement enforcement
+  - ui-009: Optimizer shows progress while running
+  - worker-002: Optimizer reports progress
+  - opt-006/opt-007: Set bonus detection and evaluation
+  - weapon-001/002/003: Special weapon handling (blowpipe, powered staves, crossbows)
+
+**Next feature to work on:** int-003 (slayer task verification) or data-004/filter-005/ui-008 (skill requirements)
