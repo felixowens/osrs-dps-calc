@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { IconCheck, IconX } from '@tabler/icons-react';
 import { OptimizerResult, EquipmentSlot } from '@/types/Optimizer';
 import { PlayerEquipment } from '@/types/Player';
 import { getCdnImage } from '@/utils';
@@ -17,6 +18,8 @@ import ring from '@/public/img/slots/ring.png';
 
 interface OptimizerResultsProps {
   result: OptimizerResult;
+  onApply?: () => void;
+  loadoutName?: string;
 }
 
 /**
@@ -116,10 +119,27 @@ function formatAccuracy(accuracy: number): string {
   return `${(accuracy * 100).toFixed(1)}%`;
 }
 
-const OptimizerResults: React.FC<OptimizerResultsProps> = ({ result }) => {
+const OptimizerResults: React.FC<OptimizerResultsProps> = ({ result, onApply, loadoutName }) => {
   const {
     equipment, metrics, cost, meta,
   } = result;
+
+  const [showConfirmation, setShowConfirmation] = useState(false);
+
+  const handleApplyClick = () => {
+    setShowConfirmation(true);
+  };
+
+  const handleConfirm = () => {
+    setShowConfirmation(false);
+    if (onApply) {
+      onApply();
+    }
+  };
+
+  const handleCancel = () => {
+    setShowConfirmation(false);
+  };
 
   return (
     <div className="space-y-4">
@@ -187,6 +207,52 @@ const OptimizerResults: React.FC<OptimizerResultsProps> = ({ result }) => {
           </div>
         )}
       </div>
+
+      {/* Apply to Loadout section */}
+      {onApply && (
+        <div className="bg-dark-500 rounded p-3">
+          {showConfirmation ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-200 text-center">
+                Replace equipment in
+                {' '}
+                <span className="font-semibold text-white">{loadoutName || 'current loadout'}</span>
+                ?
+              </p>
+              <p className="text-xs text-gray-400 text-center">
+                This will overwrite your current gear setup.
+              </p>
+              <div className="flex gap-2 justify-center">
+                <button
+                  type="button"
+                  className="btn flex items-center gap-1 text-sm px-3 py-1.5"
+                  onClick={handleCancel}
+                >
+                  <IconX size={16} />
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn flex items-center gap-1 text-sm px-3 py-1.5 bg-green-700 hover:bg-green-600"
+                  onClick={handleConfirm}
+                >
+                  <IconCheck size={16} />
+                  Confirm
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="w-full btn flex items-center justify-center gap-2 py-2"
+              onClick={handleApplyClick}
+            >
+              <IconCheck size={18} />
+              Apply to Loadout
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Meta info (for debugging/transparency) */}
       <div className="text-xs text-gray-500 text-center">

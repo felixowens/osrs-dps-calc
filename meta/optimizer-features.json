@@ -435,7 +435,7 @@
         "Confirmation before overwriting",
         "Loadout is updated with optimized equipment"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "high"
     },
     {

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
+import { toast } from 'react-toastify';
 import Modal from '@/app/components/generic/Modal';
 import { IconSparkles, IconLoader2 } from '@tabler/icons-react';
 import BlacklistManager from '@/app/components/optimizer/BlacklistManager';
@@ -85,6 +86,25 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
     }
   }, [calc, store.player, store.monster, combatStyle, budget, ownedItems, blacklistedItems]);
 
+  // Apply optimized loadout to current loadout
+  const applyLoadout = useCallback(() => {
+    if (!result) return;
+
+    // Update the player's equipment with the optimized gear
+    store.updatePlayer({
+      equipment: result.equipment,
+    });
+
+    // Close the modal
+    setIsOpen(false);
+
+    // Show success toast
+    toast.success(
+      `Applied optimized gear to ${store.player.name}`,
+      { toastId: 'optimizer-apply' },
+    );
+  }, [result, store, setIsOpen]);
+
   return (
     <Modal
       isOpen={isOpen}
@@ -145,7 +165,11 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
         {/* Results display */}
         {result && !isLoading && (
           <div className="mb-4">
-            <OptimizerResults result={result} />
+            <OptimizerResults
+              result={result}
+              onApply={applyLoadout}
+              loadoutName={store.player.name}
+            />
           </div>
         )}
 

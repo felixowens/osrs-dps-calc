@@ -901,3 +901,52 @@ This file tracks the progress of the gear optimizer implementation.
 - Budget constraint and blacklist are passed to the optimizer correctly
 
 **Next feature to work on:** ui-012 - User can apply optimized loadout (high priority)
+
+---
+
+## 2026-01-10 (ui-012)
+
+**Feature completed:** ui-012 - User can apply optimized loadout
+
+**What was implemented:**
+- Added "Apply to Loadout" button to the OptimizerResults component
+- Added inline confirmation dialog with Cancel/Confirm buttons
+  - Shows the loadout name that will be overwritten
+  - Clear warning message about overwriting current gear
+- Added `onApply` and `loadoutName` props to OptimizerResults component
+- Added `applyLoadout` callback in OptimizerModal:
+  - Calls `store.updatePlayer({ equipment: result.equipment })` to apply gear
+  - Closes the modal after applying
+  - Shows success toast notification
+- Uses existing store.updatePlayer which properly:
+  - Updates all equipment slots
+  - Recalculates equipment bonuses
+  - Handles 2H weapons (clears shield if needed)
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript type checking passes
+- All 173 Optimizer tests pass
+- Production build succeeds
+
+**Files changed:**
+- `src/app/components/optimizer/OptimizerResults.tsx` (modified - added Apply button with confirmation)
+- `src/app/components/optimizer/OptimizerModal.tsx` (modified - added applyLoadout callback)
+- `meta/optimizer-features.json` (modified - marked ui-012 as passing)
+
+**Commit:** 2dbc0f49
+
+**Notes for next agent:**
+- The optimizer now has the full end-to-end flow working:
+  1. Configure settings (combat style, budget, owned items, blacklist)
+  2. Click Optimize to run optimization in worker
+  3. View results (gear grid, metrics, cost)
+  4. Click "Apply to Loadout" → Confirm → Equipment applied
+- The confirmation dialog is inline (not a nested modal) for simplicity
+- Toast notification confirms successful application
+- Remaining high-priority UI features:
+  - ui-011: Results show comparison to current loadout (medium priority)
+  - ui-013: Apply to different loadout slot (low priority)
+- Integration features (int-001, int-002, etc.) should be evaluated - some may already be working
+
+**Next feature to work on:** ui-011 - Results show comparison to current loadout (medium priority)
