@@ -219,7 +219,7 @@
         "Can optimize for maximum max hit",
         "Objective selection affects slot priorities"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

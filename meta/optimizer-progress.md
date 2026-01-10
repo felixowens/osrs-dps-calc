@@ -1128,3 +1128,47 @@ The optimizer's `createPlayerWithEquipment()` function uses `{ ...player }` whic
 - Consider implementing opt-009 (different objectives) since the UI already has an objective selector
 
 **Next feature to work on:** int-003 (slayer task) or data-004 (skill requirements) or opt-009 (different objectives)
+
+---
+
+## 2026-01-10 (opt-009)
+
+**Feature completed:** opt-009 - Optimizer can optimize for different objectives
+
+**What was implemented:**
+- Added `objective` parameter to `OptimizeRequest` in `CalcWorkerTypes.ts`
+- Added `objective` parameter to `OptimizeLoadoutOptions` interface
+- Created `calculateMetrics()` function to compute all combat metrics (dps, accuracy, maxHit) at once
+- Created `getScoreForObjective()` function to extract the appropriate score based on objective
+- Modified `evaluateItem()` to accept an objective parameter and return objective-based scores
+- Updated `findBestItemForSlot()` to accept and use objective for item ranking
+- Updated `findBestWeaponShieldCombination()` to accept and use objective (renamed `dps` to `score` in return type)
+- Updated `findBestAmmoForWeapon()` to accept and use objective
+- Updated `optimizeLoadout()` to extract objective from options and pass it through the optimization chain
+- Updated `worker.ts` to extract objective from request and pass to `optimizeLoadout()`
+- Updated `OptimizerModal.tsx` to pass objective to the worker request
+- Added comprehensive tests for all three objectives (dps, accuracy, max_hit)
+
+**Verification:**
+- All 190 tests pass
+- ESLint passes with no errors
+- The objective selector in the UI now actually affects optimization results
+
+**Files changed:**
+- `src/worker/CalcWorkerTypes.ts` (import OptimizationObjective, add objective to OptimizeRequest)
+- `src/lib/Optimizer.ts` (calculateMetrics, getScoreForObjective, objective params throughout)
+- `src/worker/worker.ts` (extract and pass objective)
+- `src/app/components/optimizer/OptimizerModal.tsx` (pass objective to request)
+- `src/tests/lib/Optimizer.test.ts` (new tests for objectives, fix score vs dps naming)
+
+**Commit:** 3461e0e0
+
+**Notes for next agent:**
+- The objective selection now works end-to-end from UI to algorithm
+- For `accuracy` objective, higher hit chance items are preferred
+- For `max_hit` objective, higher max hit items are preferred
+- For `dps` objective (default), items are ranked by DPS as before
+- The findBestWeaponShieldCombination return type changed from `dps` to `score` to be objective-agnostic
+- Consider implementing int-003 (slayer task verification), data-004 (skill requirements), or other medium-priority features
+
+**Next feature to work on:** int-003 (slayer task verification), data-004 (skill requirements), or worker-002 (progress reporting)
