@@ -6,6 +6,37 @@ import { EquipmentPiece, PlayerEquipment, PlayerSkills } from '@/types/Player';
 export type EquipmentSlot = keyof PlayerEquipment;
 
 /**
+ * Skill requirements for an equipment item.
+ * Maps skill names to required levels.
+ */
+export interface SkillRequirements {
+  attack?: number;
+  strength?: number;
+  defence?: number;
+  ranged?: number;
+  magic?: number;
+  prayer?: number;
+  hitpoints?: number;
+  mining?: number;
+  slayer?: number;
+  agility?: number;
+  herblore?: number;
+  thieving?: number;
+  crafting?: number;
+  fletching?: number;
+  hunter?: number;
+  construction?: number;
+  firemaking?: number;
+  farming?: number;
+  woodcutting?: number;
+  fishing?: number;
+  cooking?: number;
+  smithing?: number;
+  runecrafting?: number;
+  combat?: number;
+}
+
+/**
  * Price information for an item.
  */
 export interface ItemPrice {

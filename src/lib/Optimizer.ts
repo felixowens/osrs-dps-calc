@@ -1,9 +1,10 @@
-import { EquipmentPiece, Player, PlayerEquipment } from '@/types/Player';
+import { EquipmentPiece, Player, PlayerEquipment, PlayerSkills } from '@/types/Player';
 import { Monster } from '@/types/Monster';
 import {
   CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation, ItemPrice,
-  OptimizationObjective, OptimizerConstraints, OptimizerResult, SlotOptimizationResult,
+  OptimizationObjective, OptimizerConstraints, OptimizerResult, SkillRequirements, SlotOptimizationResult,
 } from '@/types/Optimizer';
+import equipmentRequirementsData from '../../cdn/json/equipment-requirements.json';
 import {
   AmmoApplicability, ammoApplicability, availableEquipment, calculateEquipmentBonusesFromGear,
 } from '@/lib/Equipment';
@@ -350,6 +351,148 @@ export function isItemWithinBudget(
 
   // Check if within budget
   return effectivePrice <= maxBudget;
+}
+
+// ============================================================================
+// Equipment Requirements Store (data-004)
+// ============================================================================
+
+/**
+ * Type for the requirements JSON data structure.
+ */
+type RequirementsData = Record<string, SkillRequirements>;
+
+/**
+ * In-memory store for equipment skill requirements.
+ * Loaded from cdn/json/equipment-requirements.json on import.
+ */
+const requirementsStore: Map<number, SkillRequirements> = new Map();
+
+/**
+ * Load requirements from the imported JSON data.
+ * Called automatically on module load.
+ */
+function initializeRequirementsStore(): void {
+  const data = equipmentRequirementsData as RequirementsData;
+  for (const [itemIdStr, requirements] of Object.entries(data)) {
+    const itemId = parseInt(itemIdStr);
+    if (!Number.isNaN(itemId) && requirements && Object.keys(requirements).length > 0) {
+      requirementsStore.set(itemId, requirements);
+    }
+  }
+}
+
+// Initialize requirements store on module load
+initializeRequirementsStore();
+
+/**
+ * Get the number of items with requirements stored.
+ */
+export function getRequirementsStoreSize(): number {
+  return requirementsStore.size;
+}
+
+/**
+ * Check if requirements data is loaded.
+ */
+export function areRequirementsLoaded(): boolean {
+  return requirementsStore.size > 0;
+}
+
+/**
+ * Get the skill requirements for an item.
+ *
+ * @param itemId - The item's ID
+ * @returns SkillRequirements object, or undefined if no requirements exist (item has no skill requirements)
+ */
+export function getItemRequirements(itemId: number): SkillRequirements | undefined {
+  return requirementsStore.get(itemId);
+}
+
+/**
+ * Map of skill names in requirements data to PlayerSkills property names.
+ * The requirements data uses lowercase skill names, PlayerSkills uses abbreviated names.
+ */
+const SKILL_NAME_MAP: Record<string, keyof PlayerSkills> = {
+  attack: 'atk',
+  strength: 'str',
+  defence: 'def',
+  ranged: 'ranged',
+  magic: 'magic',
+  prayer: 'prayer',
+  hitpoints: 'hp',
+  mining: 'mining',
+  herblore: 'herblore',
+  // Skills not in PlayerSkills are not checked (slayer, agility, etc.)
+};
+
+/**
+ * Check if a player meets the skill requirements for an item.
+ *
+ * @param playerSkills - The player's skill levels
+ * @param itemId - The item's ID
+ * @returns True if the player meets all requirements, or if the item has no requirements
+ */
+export function playerMeetsRequirements(playerSkills: PlayerSkills, itemId: number): boolean {
+  const requirements = getItemRequirements(itemId);
+
+  // No requirements = player can equip
+  if (!requirements) {
+    return true;
+  }
+
+  // Check each requirement
+  for (const [skillName, requiredLevel] of Object.entries(requirements)) {
+    const playerSkillKey = SKILL_NAME_MAP[skillName];
+
+    if (playerSkillKey) {
+      const playerLevel = playerSkills[playerSkillKey];
+      if (playerLevel < requiredLevel) {
+        return false;
+      }
+    }
+    // Skills not in SKILL_NAME_MAP are ignored (e.g., slayer, agility)
+    // These could be added to PlayerSkills in the future if needed
+  }
+
+  return true;
+}
+
+/**
+ * Check if a player meets the skill requirements for an equipment piece.
+ *
+ * @param playerSkills - The player's skill levels
+ * @param item - The equipment piece to check
+ * @returns True if the player meets all requirements
+ */
+export function playerMeetsItemRequirements(playerSkills: PlayerSkills, item: EquipmentPiece): boolean {
+  return playerMeetsRequirements(playerSkills, item.id);
+}
+
+/**
+ * Filter equipment by skill requirements.
+ *
+ * Returns only items that the player can equip based on their skill levels.
+ *
+ * @param playerSkills - The player's skill levels
+ * @param equipment - Optional array of equipment to filter. Defaults to all available equipment.
+ * @returns Array of equipment pieces the player can equip
+ *
+ * @example
+ * ```typescript
+ * const playerSkills = { atk: 75, str: 75, def: 75, ranged: 1, magic: 1, hp: 99, prayer: 70, mining: 1, herblore: 1 };
+ * const equippable = filterBySkillRequirements(playerSkills);
+ *
+ * // Chain with other filters
+ * const weapons = filterBySlot('weapon');
+ * const equippableWeapons = filterBySkillRequirements(playerSkills, weapons);
+ * ```
+ */
+export function filterBySkillRequirements(
+  playerSkills: PlayerSkills,
+  equipment: EquipmentPiece[] = availableEquipment,
+): EquipmentPiece[] {
+  return equipment.filter((item) => playerMeetsRequirements(playerSkills, item.id));
 }
 
 // ============================================================================

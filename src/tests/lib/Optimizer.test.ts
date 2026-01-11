@@ -19,6 +19,9 @@ import {
   arePricesLoaded, getPriceStoreSize, getLastPriceFetchTime, fetchAndLoadPrices, refreshPrices,
   // Objective-based optimization (opt-009)
   calculateMetrics, getScoreForObjective,
+  // Skill requirements (data-004)
+  areRequirementsLoaded, getRequirementsStoreSize, getItemRequirements,
+  playerMeetsRequirements, playerMeetsItemRequirements, filterBySkillRequirements,
 } from '@/lib/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
@@ -202,7 +205,7 @@ describe('Optimizer', () => {
   describe('evaluateItem (opt-001)', () => {
     const abyssalWhip = findEquipment('Abyssal whip');
     const rapier = findEquipment('Ghrazi rapier');
-    const bronzeSword = findEquipment('Bronze sword');
+    const archersRing = findEquipment('Bronze sword');
     const torvaHelm = findEquipment('Torva full helm');
     const nezzyHelm = findEquipment('Neitiznot faceguard');
 
@@ -225,10 +228,10 @@ describe('Optimizer', () => {
     test('better weapons produce higher DPS', () => {
       const monster = getTestMonster('Abyssal demon');
       const player = getTestPlayer(monster, {
-        equipment: { weapon: bronzeSword },
+        equipment: { weapon: archersRing },
       });
 
-      const bronzeEval = evaluateItem(player, monster, bronzeSword);
+      const bronzeEval = evaluateItem(player, monster, archersRing);
       const whipEval = evaluateItem(player, monster, abyssalWhip);
       const rapierEval = evaluateItem(player, monster, rapier);
 
@@ -363,7 +366,7 @@ describe('Optimizer', () => {
 
   describe('evaluateItemDelta', () => {
     const abyssalWhip = findEquipment('Abyssal whip');
-    const bronzeSword = findEquipment('Bronze sword');
+    const archersRing = findEquipment('Bronze sword');
     const firefCape = findEquipment('Infernal cape');
     const ardiCape = findEquipment('Ardougne cloak 4');
 
@@ -385,7 +388,7 @@ describe('Optimizer', () => {
         equipment: { weapon: abyssalWhip },
       });
 
-      const delta = evaluateItemDelta(player, monster, bronzeSword);
+      const delta = evaluateItemDelta(player, monster, archersRing);
 
       // Bronze sword is a downgrade from abyssal whip
       expect(delta).toBeLessThan(0);
@@ -1535,7 +1538,7 @@ describe('Optimizer', () => {
     const abyssalWhip = findEquipment('Abyssal whip');
     const rapier = findEquipment('Ghrazi rapier');
     const torvaHelm = findEquipment('Torva full helm');
-    const bronzeSword = findEquipment('Bronze sword');
+    const archersRing = findEquipment('Bronze sword');
 
     // Clear price store before each test to ensure clean state
     beforeEach(() => {
@@ -1577,12 +1580,12 @@ describe('Optimizer', () => {
           setItemPrices({
             [abyssalWhip.id]: 2_500_000,
             [rapier.id]: 140_000_000,
-            [bronzeSword.id]: 100,
+            [archersRing.id]: 100,
           });
 
           expect(getItemPrice(abyssalWhip.id)).toBe(2_500_000);
           expect(getItemPrice(rapier.id)).toBe(140_000_000);
-          expect(getItemPrice(bronzeSword.id)).toBe(100);
+          expect(getItemPrice(archersRing.id)).toBe(100);
         });
       });
 
@@ -1698,15 +1701,15 @@ describe('Optimizer', () => {
         // Set prices for test items
         setItemPrice(abyssalWhip.id, 2_500_000);
         setItemPrice(rapier.id, 140_000_000);
-        setItemPrice(bronzeSword.id, 100);
+        setItemPrice(archersRing.id, 100);
 
-        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const testItems = [abyssalWhip, rapier, archersRing];
 
         // Filter by 5M budget
         const filtered = filterByBudget(5_000_000, testItems);
 
         expect(filtered).toContain(abyssalWhip);
-        expect(filtered).toContain(bronzeSword);
+        expect(filtered).toContain(archersRing);
         expect(filtered).not.toContain(rapier);
       });
 
@@ -1739,27 +1742,27 @@ describe('Optimizer', () => {
 
       test('items with unknown prices are included by default', () => {
         // Don't set any prices - all prices unknown
-        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const testItems = [abyssalWhip, rapier, archersRing];
 
         const filtered = filterByBudget(0, testItems);
 
         // All items included because prices are unknown
         expect(filtered).toContain(abyssalWhip);
         expect(filtered).toContain(rapier);
-        expect(filtered).toContain(bronzeSword);
+        expect(filtered).toContain(archersRing);
       });
 
       test('items with unknown prices excluded when excludeUnknownPrices is true', () => {
         // Set price only for whip
         setItemPrice(abyssalWhip.id, 2_500_000);
 
-        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const testItems = [abyssalWhip, rapier, archersRing];
 
         const filtered = filterByBudget(5_000_000, testItems, undefined, true);
 
         expect(filtered).toContain(abyssalWhip); // Has price, within budget
         expect(filtered).not.toContain(rapier); // Unknown price, excluded
-        expect(filtered).not.toContain(bronzeSword); // Unknown price, excluded
+        expect(filtered).not.toContain(archersRing); // Unknown price, excluded
       });
 
       test('can chain with other filters', () => {
@@ -1767,7 +1770,7 @@ describe('Optimizer', () => {
         setItemPrices({
           [abyssalWhip.id]: 2_500_000,
           [rapier.id]: 140_000_000,
-          [bronzeSword.id]: 100,
+          [archersRing.id]: 100,
         });
 
         // Filter by slot first, then by budget
@@ -1794,14 +1797,14 @@ describe('Optimizer', () => {
       });
 
       test('handles edge case of zero budget', () => {
-        setItemPrice(bronzeSword.id, 100);
+        setItemPrice(archersRing.id, 100);
         setItemPrice(abyssalWhip.id, 0); // Free item
 
-        const testItems = [bronzeSword, abyssalWhip];
+        const testItems = [archersRing, abyssalWhip];
         const filtered = filterByBudget(0, testItems);
 
         expect(filtered).toContain(abyssalWhip); // 0 GP item
-        expect(filtered).not.toContain(bronzeSword); // 100 GP, over 0 budget
+        expect(filtered).not.toContain(archersRing); // 100 GP, over 0 budget
       });
 
       test('handles large budgets correctly', () => {
@@ -1820,17 +1823,17 @@ describe('Optimizer', () => {
       test('combined owned + budget filtering', () => {
         // Expensive item owned, cheap item not owned
         setItemPrice(rapier.id, 140_000_000);
-        setItemPrice(bronzeSword.id, 100);
+        setItemPrice(archersRing.id, 100);
         setItemPrice(abyssalWhip.id, 2_500_000);
 
-        const testItems = [rapier, bronzeSword, abyssalWhip];
+        const testItems = [rapier, archersRing, abyssalWhip];
         const ownedItems = new Set([rapier.id]);
 
         // Budget of 500 GP
         const filtered = filterByBudget(500, testItems, ownedItems);
 
         expect(filtered).toContain(rapier); // Owned (free)
-        expect(filtered).toContain(bronzeSword); // Cheap
+        expect(filtered).toContain(archersRing); // Cheap
         expect(filtered).not.toContain(abyssalWhip); // Not owned, over budget
       });
     });
@@ -1841,37 +1844,37 @@ describe('Optimizer', () => {
     const abyssalWhip = findEquipment('Abyssal whip');
     const rapier = findEquipment('Ghrazi rapier');
     const torvaHelm = findEquipment('Torva full helm');
-    const bronzeSword = findEquipment('Bronze sword');
+    const archersRing = findEquipment('Bronze sword');
     const dragonDefender = findEquipment('Dragon defender');
 
     describe('filterByBlacklist', () => {
       test('excludes blacklisted items from results', () => {
         const blacklist = new Set([abyssalWhip.id, rapier.id]);
-        const testItems = [abyssalWhip, rapier, bronzeSword, torvaHelm];
+        const testItems = [abyssalWhip, rapier, archersRing, torvaHelm];
 
         const filtered = filterByBlacklist(blacklist, testItems);
 
         expect(filtered).not.toContain(abyssalWhip);
         expect(filtered).not.toContain(rapier);
-        expect(filtered).toContain(bronzeSword);
+        expect(filtered).toContain(archersRing);
         expect(filtered).toContain(torvaHelm);
       });
 
       test('empty blacklist returns all items', () => {
         const blacklist = new Set<number>();
-        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const testItems = [abyssalWhip, rapier, archersRing];
 
         const filtered = filterByBlacklist(blacklist, testItems);
 
         expect(filtered.length).toBe(testItems.length);
         expect(filtered).toContain(abyssalWhip);
         expect(filtered).toContain(rapier);
-        expect(filtered).toContain(bronzeSword);
+        expect(filtered).toContain(archersRing);
       });
 
       test('blacklist with all items returns empty array', () => {
-        const testItems = [abyssalWhip, rapier, bronzeSword];
-        const blacklist = new Set([abyssalWhip.id, rapier.id, bronzeSword.id]);
+        const testItems = [abyssalWhip, rapier, archersRing];
+        const blacklist = new Set([abyssalWhip.id, rapier.id, archersRing.id]);
 
         const filtered = filterByBlacklist(blacklist, testItems);
 
@@ -1901,14 +1904,14 @@ describe('Optimizer', () => {
 
       test('single item blacklist works correctly', () => {
         const blacklist = new Set([rapier.id]);
-        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const testItems = [abyssalWhip, rapier, archersRing];
 
         const filtered = filterByBlacklist(blacklist, testItems);
 
         expect(filtered.length).toBe(2);
         expect(filtered).toContain(abyssalWhip);
         expect(filtered).not.toContain(rapier);
-        expect(filtered).toContain(bronzeSword);
+        expect(filtered).toContain(archersRing);
       });
     });
 
@@ -1927,7 +1930,7 @@ describe('Optimizer', () => {
         expect(filteredWeapons).not.toContain(rapier);
 
         // Non-blacklisted weapons should be present
-        expect(filteredWeapons).toContain(bronzeSword);
+        expect(filteredWeapons).toContain(archersRing);
       });
 
       test('chains with filterByCombatStyle', () => {
@@ -1948,10 +1951,10 @@ describe('Optimizer', () => {
         clearPriceStore();
         setItemPrice(abyssalWhip.id, 2_500_000);
         setItemPrice(rapier.id, 140_000_000);
-        setItemPrice(bronzeSword.id, 100);
+        setItemPrice(archersRing.id, 100);
 
-        const blacklist = new Set([bronzeSword.id]);
-        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const blacklist = new Set([archersRing.id]);
+        const testItems = [abyssalWhip, rapier, archersRing];
 
         // Filter by budget first, then by blacklist
         const affordable = filterByBudget(5_000_000, testItems);
@@ -1961,7 +1964,7 @@ describe('Optimizer', () => {
         expect(filteredAffordable).toContain(abyssalWhip);
 
         // Bronze sword is affordable but blacklisted
-        expect(filteredAffordable).not.toContain(bronzeSword);
+        expect(filteredAffordable).not.toContain(archersRing);
 
         // Rapier is over budget (filtered by budget)
         expect(filteredAffordable).not.toContain(rapier);
@@ -2021,18 +2024,18 @@ describe('Optimizer', () => {
 
       test('preserves original item references', () => {
         const blacklist = new Set([rapier.id]);
-        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const testItems = [abyssalWhip, rapier, archersRing];
 
         const filtered = filterByBlacklist(blacklist, testItems);
 
         // Original items should be the same objects
         expect(filtered[0]).toBe(abyssalWhip);
-        expect(filtered[1]).toBe(bronzeSword);
+        expect(filtered[1]).toBe(archersRing);
       });
 
       test('original array is not modified', () => {
         const blacklist = new Set([abyssalWhip.id]);
-        const testItems = [abyssalWhip, rapier, bronzeSword];
+        const testItems = [abyssalWhip, rapier, archersRing];
         const originalLength = testItems.length;
 
         filterByBlacklist(blacklist, testItems);
@@ -2049,7 +2052,7 @@ describe('Optimizer', () => {
         const player = getTestPlayer(monster, { equipment: { weapon: abyssalWhip } });
 
         const blacklist = new Set([rapier.id]);
-        const weapons = [abyssalWhip, rapier, bronzeSword];
+        const weapons = [abyssalWhip, rapier, archersRing];
 
         // Method 1: Use filterByBlacklist before findBestItemForSlot
         const filteredWeapons = filterByBlacklist(blacklist, weapons);
@@ -2075,7 +2078,7 @@ describe('Optimizer', () => {
     // Test items with known prices
     const abyssalWhip = findEquipment('Abyssal whip');
     const rapier = findEquipment('Ghrazi rapier');
-    const bronzeSword = findEquipment('Bronze sword');
+    const archersRing = findEquipment('Bronze sword');
     const torvaHelm = findEquipment('Torva full helm');
     const torvaBody = findEquipment('Torva platebody');
     const torvaLegs = findEquipment('Torva platelegs');
@@ -2099,7 +2102,7 @@ describe('Optimizer', () => {
       setItemPrice(amuletOfTorture.id, 10_000_000); // 10M
       setItemPrice(berserkerRing.id, 5_000_000); // 5M (imbued)
       setItemPrice(abyssalWhip.id, 2_500_000); // 2.5M
-      setItemPrice(bronzeSword.id, 100); // 100 GP
+      setItemPrice(archersRing.id, 100); // 100 GP
       setItemPrice(dragonDefender.id, 0); // Free (untradeable)
       setItemUntradeable(fighterTorso.id); // Fighter torso is untradeable
     });
@@ -2779,6 +2782,210 @@ describe('Optimizer', () => {
 
         expect(affordable).toContain(abyssalWhip); // ~2.45M, within budget
         expect(affordable).not.toContain(rapier); // ~142.5M, over budget
+      });
+    });
+  });
+
+  // ============================================================================
+  // Skill Requirements (data-004)
+  // ============================================================================
+  describe('Skill Requirements (data-004)', () => {
+    // Test items with known requirements
+    // Abyssal whip: 70 attack
+    const whip = findEquipment('Abyssal whip');
+    // Dragon scimitar: 60 attack
+    const dScim = findEquipment('Dragon scimitar');
+    // Archers ring: no requirements (rings don't have skill requirements)
+    const archersRing = findEquipment('Archers ring');
+
+    describe('areRequirementsLoaded', () => {
+      test('returns true when requirements are loaded', () => {
+        expect(areRequirementsLoaded()).toBe(true);
+      });
+    });
+
+    describe('getRequirementsStoreSize', () => {
+      test('returns positive number of items with requirements', () => {
+        const size = getRequirementsStoreSize();
+        expect(size).toBeGreaterThan(0);
+        // We know we have ~1900 items with requirements from the fetch
+        expect(size).toBeGreaterThan(1000);
+      });
+    });
+
+    describe('getItemRequirements', () => {
+      test('returns requirements for abyssal whip (70 attack)', () => {
+        const reqs = getItemRequirements(whip.id);
+        expect(reqs).toBeDefined();
+        expect(reqs?.attack).toBe(70);
+      });
+
+      test('returns requirements for dragon scimitar (60 attack)', () => {
+        const reqs = getItemRequirements(dScim.id);
+        expect(reqs).toBeDefined();
+        expect(reqs?.attack).toBe(60);
+      });
+
+      test('returns undefined for items with no requirements', () => {
+        const reqs = getItemRequirements(archersRing.id);
+        expect(reqs).toBeUndefined();
+      });
+
+      test('returns undefined for non-existent item', () => {
+        const reqs = getItemRequirements(999999999);
+        expect(reqs).toBeUndefined();
+      });
+    });
+
+    describe('playerMeetsRequirements', () => {
+      const highSkills = {
+        atk: 99,
+        str: 99,
+        def: 99,
+        ranged: 99,
+        magic: 99,
+        hp: 99,
+        prayer: 99,
+        mining: 99,
+        herblore: 99,
+      };
+
+      const lowSkills = {
+        atk: 1,
+        str: 1,
+        def: 1,
+        ranged: 1,
+        magic: 1,
+        hp: 10,
+        prayer: 1,
+        mining: 1,
+        herblore: 1,
+      };
+
+      const midSkills = {
+        atk: 60,
+        str: 60,
+        def: 60,
+        ranged: 60,
+        magic: 60,
+        hp: 60,
+        prayer: 45,
+        mining: 1,
+        herblore: 1,
+      };
+
+      test('returns true when player meets requirements', () => {
+        expect(playerMeetsRequirements(highSkills, whip.id)).toBe(true);
+      });
+
+      test('returns false when player does not meet requirements', () => {
+        expect(playerMeetsRequirements(lowSkills, whip.id)).toBe(false);
+      });
+
+      test('returns true for item with no requirements', () => {
+        expect(playerMeetsRequirements(lowSkills, archersRing.id)).toBe(true);
+      });
+
+      test('returns true for non-existent item (no requirements)', () => {
+        expect(playerMeetsRequirements(lowSkills, 999999999)).toBe(true);
+      });
+
+      test('mid-level player can use dragon scim but not whip', () => {
+        expect(playerMeetsRequirements(midSkills, dScim.id)).toBe(true);
+        expect(playerMeetsRequirements(midSkills, whip.id)).toBe(false);
+      });
+    });
+
+    describe('playerMeetsItemRequirements', () => {
+      const highSkills = {
+        atk: 99,
+        str: 99,
+        def: 99,
+        ranged: 99,
+        magic: 99,
+        hp: 99,
+        prayer: 99,
+        mining: 99,
+        herblore: 99,
+      };
+
+      test('works with equipment piece objects', () => {
+        expect(playerMeetsItemRequirements(highSkills, whip)).toBe(true);
+      });
+    });
+
+    describe('filterBySkillRequirements', () => {
+      const highSkills = {
+        atk: 99,
+        str: 99,
+        def: 99,
+        ranged: 99,
+        magic: 99,
+        hp: 99,
+        prayer: 99,
+        mining: 99,
+        herblore: 99,
+      };
+
+      const lowSkills = {
+        atk: 1,
+        str: 1,
+        def: 1,
+        ranged: 1,
+        magic: 1,
+        hp: 10,
+        prayer: 1,
+        mining: 1,
+        herblore: 1,
+      };
+
+      test('high level player can equip all items', () => {
+        const filtered = filterBySkillRequirements(highSkills);
+        // Should include basically everything
+        expect(filtered.length).toBe(availableEquipment.length);
+      });
+
+      test('low level player has restricted equipment options', () => {
+        const filtered = filterBySkillRequirements(lowSkills);
+        // Should have fewer items than total
+        expect(filtered.length).toBeLessThan(availableEquipment.length);
+        // But should still have some items (no-requirement items)
+        expect(filtered.length).toBeGreaterThan(0);
+      });
+
+      test('filters out items above player level', () => {
+        const filtered = filterBySkillRequirements(lowSkills);
+        // Should not include whip (70 attack req)
+        expect(filtered).not.toContain(whip);
+        // Should include bronze sword (no req)
+        expect(filtered).toContain(archersRing);
+      });
+
+      test('can be chained with other filters', () => {
+        const weapons = filterBySlot('weapon');
+        const filteredWeapons = filterBySkillRequirements(lowSkills, weapons);
+
+        expect(filteredWeapons.length).toBeLessThan(weapons.length);
+        expect(filteredWeapons.every((item) => item.slot === 'weapon')).toBe(true);
+      });
+
+      test('level 60 player can use dragon scim but not whip', () => {
+        const midSkills = {
+          atk: 60,
+          str: 60,
+          def: 60,
+          ranged: 60,
+          magic: 60,
+          hp: 60,
+          prayer: 45,
+          mining: 1,
+          herblore: 1,
+        };
+
+        const filtered = filterBySkillRequirements(midSkills);
+
+        expect(filtered).toContain(dScim);
+        expect(filtered).not.toContain(whip);
       });
     });
   });

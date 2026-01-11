@@ -1271,7 +1271,7 @@ The slayer task setting is already fully functional through the existing DPS cal
 - `meta/optimizer-features.json` (marked int-003 as passing)
 - `meta/optimizer-progress.md` (this entry)
 
-**Commit:** (pending)
+**Commit:** 5fdce98b
 
 **Notes for next agent:**
 - All integration features (int-001 through int-004) are now complete
