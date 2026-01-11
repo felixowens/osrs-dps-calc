@@ -255,7 +255,7 @@
         "Bolt tier matches crossbow requirements",
         "Special bolts (ruby, diamond, etc.) are considered"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

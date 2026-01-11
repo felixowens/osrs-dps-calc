@@ -1657,3 +1657,61 @@ The slayer task setting is already fully functional through the existing DPS cal
 
 **Next feature to work on:** weapon-003 (crossbow bolt selection) or other features
 
+---
+
+## 2026-01-11 (weapon-003)
+
+**Feature completed:** weapon-003 - Crossbow bolt selection is handled
+
+**What was implemented:**
+- Verified that crossbow bolt selection was ALREADY WORKING through existing ammunition handling code:
+  - `weaponRequiresAmmo()` correctly identifies crossbows as requiring ammo
+  - `ammoApplicability()` in Equipment.ts has comprehensive bolt lists for all crossbow tiers:
+    - cb_t1 through cb_t64 covering bronze through dragon crossbows
+    - Each tier includes all valid bolt types including enchanted bolts
+  - `filterValidAmmoForWeapon()` correctly filters bolts by crossbow tier
+  - `findBestAmmoForWeapon()` evaluates all valid bolts and selects the best one
+
+- Verified enchanted bolt special effects are fully supported in PlayerVsNPCCalc:
+  - Ruby bolts (e) - percentage of monster HP as damage
+  - Diamond bolts (e) - ignores defense with bonus max hit
+  - Dragonstone bolts (e) - bonus damage (immune vs dragons/fiery)
+  - Onyx bolts (e) - bonus damage with life leech (immune vs undead)
+  - Opal bolts (e) - ranged level based bonus damage
+  - Pearl bolts (e) - ranged level based bonus damage
+  - All effects are properly calculated via `src/lib/dists/bolts.ts`
+
+- Added 17 comprehensive tests for weapon-003 in `src/tests/lib/Optimizer.test.ts`:
+  - Bolt tier requirements (5 tests): Verifies correct tier restrictions
+  - Enchanted bolt availability (6 tests): Verifies all enchanted bolt types are valid
+  - Bolt selection considers enchanted bolts (4 tests): Verifies optimizer can select them
+  - Bolt DPS contribution (2 tests): Verifies DPS calculation includes bolt effects
+
+**Verification:**
+- All 313 Optimizer tests pass (17 new tests added)
+- ESLint passes with no errors
+- TypeScript check passes
+- Crossbow bolt selection works end-to-end including special bolt effects
+
+**Files changed:**
+- `src/tests/lib/Optimizer.test.ts` (added 17 tests for weapon-003)
+- `meta/optimizer-features.json` (marked weapon-003 as passing)
+
+**Commit:** (to be added after commit)
+
+**Notes for next agent:**
+- Crossbow bolt selection was already fully functional through the existing ammo handling code
+- The key components are:
+  - `ammoForRangedWeapons` in Equipment.ts - maps crossbow IDs to valid bolt IDs
+  - `commonAmmoCategories()` - defines bolt tiers (cb_t1 through cb_t64)
+  - `PlayerVsNPCCalc.getDistribution()` - applies bolt special effects
+- Enchanted bolt DPS is calculated properly including proc chance adjustments
+- Zaryte crossbow gets enhanced bolt effects (higher damage, better proc chance)
+- Remaining features to implement:
+  - worker-002: Optimizer reports progress (medium priority)
+  - ui-009: Optimizer shows progress while running (medium priority)
+  - worker-003: Optimizer can be cancelled (low priority)
+  - Edge cases: edge-001 through edge-004
+
+**Next feature to work on:** worker-002 (progress reporting) or edge-001 (empty budget handling)
+

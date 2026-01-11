@@ -1547,6 +1547,172 @@ describe('Optimizer', () => {
     });
   });
 
+  describe('Crossbow bolt selection (weapon-003)', () => {
+    // Get crossbow and bolt items
+    const runeCrossbow = findEquipment('Rune crossbow');
+    const dragonCrossbow = findEquipment('Dragon crossbow');
+    const zaryteCrossbow = findEquipment('Zaryte crossbow');
+    const armadylCrossbow = findEquipment('Armadyl crossbow');
+
+    // Regular bolts
+    const runeBotsUnpoisoned = findEquipment('Runite bolts', 'Unpoisoned');
+    const dragonBolts = findEquipment('Dragon bolts', 'Unpoisoned');
+
+    // Enchanted bolts (special effects)
+    const rubyBoltsE = findEquipment('Ruby bolts (e)');
+    const diamondBoltsE = findEquipment('Diamond bolts (e)');
+    const dragonRubyBoltsE = findEquipment('Ruby dragon bolts (e)');
+    const dragonDiamondBoltsE = findEquipment('Diamond dragon bolts (e)');
+    const onyxBoltsE = findEquipment('Onyx bolts (e)');
+    const dragonstoneBoltsE = findEquipment('Dragonstone bolts (e)');
+
+    describe('Bolt tier requirements', () => {
+      test('rune crossbow can use runite bolts', () => {
+        expect(isAmmoValidForWeapon(runeCrossbow.id, runeBotsUnpoisoned.id)).toBe(true);
+      });
+
+      test('rune crossbow cannot use dragon bolts (tier too high)', () => {
+        expect(isAmmoValidForWeapon(runeCrossbow.id, dragonBolts.id)).toBe(false);
+      });
+
+      test('dragon crossbow can use dragon bolts', () => {
+        expect(isAmmoValidForWeapon(dragonCrossbow.id, dragonBolts.id)).toBe(true);
+      });
+
+      test('zaryte crossbow can use dragon bolts', () => {
+        expect(isAmmoValidForWeapon(zaryteCrossbow.id, dragonBolts.id)).toBe(true);
+      });
+
+      test('armadyl crossbow can use dragon bolts', () => {
+        expect(isAmmoValidForWeapon(armadylCrossbow.id, dragonBolts.id)).toBe(true);
+      });
+    });
+
+    describe('Enchanted bolt availability', () => {
+      test('ruby bolts (e) are valid for rune crossbow', () => {
+        expect(isAmmoValidForWeapon(runeCrossbow.id, rubyBoltsE.id)).toBe(true);
+      });
+
+      test('diamond bolts (e) are valid for rune crossbow', () => {
+        expect(isAmmoValidForWeapon(runeCrossbow.id, diamondBoltsE.id)).toBe(true);
+      });
+
+      test('onyx bolts (e) are valid for rune crossbow', () => {
+        expect(isAmmoValidForWeapon(runeCrossbow.id, onyxBoltsE.id)).toBe(true);
+      });
+
+      test('dragonstone bolts (e) are valid for rune crossbow', () => {
+        expect(isAmmoValidForWeapon(runeCrossbow.id, dragonstoneBoltsE.id)).toBe(true);
+      });
+
+      test('ruby dragon bolts (e) are valid for zaryte crossbow', () => {
+        expect(isAmmoValidForWeapon(zaryteCrossbow.id, dragonRubyBoltsE.id)).toBe(true);
+      });
+
+      test('diamond dragon bolts (e) are valid for zaryte crossbow', () => {
+        expect(isAmmoValidForWeapon(zaryteCrossbow.id, dragonDiamondBoltsE.id)).toBe(true);
+      });
+    });
+
+    describe('Bolt selection considers enchanted bolts', () => {
+      test('enchanted bolts are included in candidate list for crossbows', () => {
+        const allAmmo = filterBySlot('ammo');
+        const validBolts = filterValidAmmoForWeapon(runeCrossbow.id, allAmmo);
+
+        // Should include ruby bolts (e)
+        const hasRubyBoltsE = validBolts.some((b) => b.name === 'Ruby bolts (e)');
+        expect(hasRubyBoltsE).toBe(true);
+
+        // Should include diamond bolts (e)
+        const hasDiamondBoltsE = validBolts.some((b) => b.name === 'Diamond bolts (e)');
+        expect(hasDiamondBoltsE).toBe(true);
+
+        // Should include onyx bolts (e)
+        const hasOnyxBoltsE = validBolts.some((b) => b.name === 'Onyx bolts (e)');
+        expect(hasOnyxBoltsE).toBe(true);
+      });
+
+      test('dragon enchanted bolts are included for dragon/zaryte crossbow', () => {
+        const allAmmo = filterBySlot('ammo');
+        const validBolts = filterValidAmmoForWeapon(zaryteCrossbow.id, allAmmo);
+
+        // Should include ruby dragon bolts (e)
+        const hasRubyDragonBoltsE = validBolts.some((b) => b.name === 'Ruby dragon bolts (e)');
+        expect(hasRubyDragonBoltsE).toBe(true);
+
+        // Should include diamond dragon bolts (e)
+        const hasDiamondDragonBoltsE = validBolts.some((b) => b.name === 'Diamond dragon bolts (e)');
+        expect(hasDiamondDragonBoltsE).toBe(true);
+      });
+
+      test('findBestAmmoForWeapon selects bolt for zaryte crossbow', () => {
+        // Test against a high HP monster where ruby bolts are effective
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: zaryteCrossbow } });
+        const allAmmo = filterBySlot('ammo');
+
+        const result = findBestAmmoForWeapon(player, monster, allAmmo);
+
+        expect(result.bestItem).not.toBeNull();
+        expect(result.bestItem?.slot).toBe('ammo');
+        // Should select a bolt (not an arrow)
+        expect(result.bestItem?.name.toLowerCase()).toContain('bolt');
+      });
+
+      test('optimizeLoadout selects appropriate bolts for crossbow', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, { equipment: { weapon: zaryteCrossbow } });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'ranged' });
+
+        // If the optimizer selected the zaryte crossbow (or another crossbow)
+        if (result.equipment.weapon?.name?.toLowerCase().includes('crossbow')) {
+          // Ammo should be selected
+          expect(result.equipment.ammo).not.toBeNull();
+          // Should be a bolt
+          expect(result.equipment.ammo?.name.toLowerCase()).toContain('bolt');
+          // Should be valid for the weapon
+          expect(isAmmoValidForWeapon(result.equipment.weapon!.id, result.equipment.ammo!.id)).toBe(true);
+        }
+      });
+    });
+
+    describe('Bolt DPS contribution', () => {
+      test('enchanted bolts produce different DPS than regular bolts', () => {
+        const monster = getTestMonster('Abyssal demon');
+
+        // Player with regular bolts
+        const regularPlayer = getTestPlayer(monster, {
+          equipment: { weapon: runeCrossbow, ammo: runeBotsUnpoisoned },
+        });
+        const regularDps = calculateDps(regularPlayer, monster);
+
+        // Player with diamond bolts (e)
+        const diamondPlayer = getTestPlayer(monster, {
+          equipment: { weapon: runeCrossbow, ammo: diamondBoltsE },
+        });
+        const diamondDps = calculateDps(diamondPlayer, monster);
+
+        // DPS should be different due to enchanted bolt effect
+        // Diamond bolts (e) ignore defense, which should affect DPS
+        expect(diamondDps).not.toBe(regularDps);
+      });
+
+      test('dragon enchanted bolts are evaluated against zaryte crossbow', () => {
+        const monster = getTestMonster('Abyssal demon');
+
+        // Player with dragon diamond bolts (e) and zaryte crossbow
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: zaryteCrossbow, ammo: dragonDiamondBoltsE },
+        });
+        const dps = calculateDps(player, monster);
+
+        // Should produce positive DPS
+        expect(dps).toBeGreaterThan(0);
+      });
+    });
+  });
+
   describe('Budget filtering (filter-003)', () => {
     // Test items
     const abyssalWhip = findEquipment('Abyssal whip');
