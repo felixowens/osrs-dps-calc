@@ -1524,7 +1524,7 @@ The slayer task setting is already fully functional through the existing DPS cal
 - `src/tests/lib/Optimizer.test.ts` (added 15 tests for opt-007, updated imports)
 - `meta/optimizer-features.json` (marked opt-007 as passing)
 
-**Commit:** (pending)
+**Commit:** 9bde5b4d
 
 **Notes for next agent:**
 - Set bonus evaluation is now complete - the optimizer compares set DPS vs greedy BiS
