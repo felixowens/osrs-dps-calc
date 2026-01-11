@@ -554,6 +554,9 @@ export function playerMeetsItemRequirements(playerSkills: PlayerSkills, item: Eq
  * const equippableWeapons = filterBySkillRequirements(playerSkills, weapons);
  * ```
  */
+// Slots that typically have no skill requirements - don't exclude items without known reqs
+const SLOTS_WITHOUT_REQUIREMENTS = new Set(['ammo', 'ring']);
+
 export function filterBySkillRequirements(
   playerSkills: PlayerSkills,
   equipment: EquipmentPiece[] = availableEquipment,
@@ -561,6 +564,10 @@ export function filterBySkillRequirements(
   return equipment.filter((item) => {
     // First check if we have known requirements for this item
     if (!hasKnownRequirements(item.id)) {
+      // Allow items in slots that typically have no requirements
+      if (SLOTS_WITHOUT_REQUIREMENTS.has(item.slot)) {
+        return true;
+      }
       // Log warning once per item
       if (!warnedMissingRequirements.has(item.id)) {
         warnedMissingRequirements.add(item.id);

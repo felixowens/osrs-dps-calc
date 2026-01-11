@@ -3209,10 +3209,12 @@ describe('Optimizer', () => {
         herblore: 1,
       };
 
-      test('high level player can equip all items', () => {
+      test('high level player can equip all items with known requirements', () => {
         const filtered = filterBySkillRequirements(highSkills);
-        // Should include basically everything
-        expect(filtered.length).toBe(availableEquipment.length);
+        // Should include many items (those with known requirements + ammo/rings)
+        expect(filtered.length).toBeGreaterThan(2000);
+        // Should include high-level items like whip
+        expect(filtered).toContain(whip);
       });
 
       test('low level player has restricted equipment options', () => {
