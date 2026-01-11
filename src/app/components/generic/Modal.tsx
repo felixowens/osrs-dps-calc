@@ -50,7 +50,7 @@ const Modal: React.FC<PropsWithChildren<IModalProps>> = (props) => {
                 </button>
               )}
             </Dialog.Title>
-            <div className="px-4 py-2 max-w-xl my-2 mx-auto">
+            <div className="px-4 py-2 max-w-xl my-2 mx-auto max-h-[70vh] overflow-y-auto">
               {children}
             </div>
             {footerChildren && (
