@@ -55,6 +55,19 @@
       "priority": "medium"
     },
     {
+      "id": "data-005",
+      "category": "data",
+      "description": "Review items missing skill requirements for false positives",
+      "steps": [
+        "Run scripts/findMissingRequirements.py to generate missing-requirements.json",
+        "Review items in cdn/json/missing-requirements.json for items that should have requirements",
+        "Add missing requirements to equipment-requirements.json or equipment_aliases.json as appropriate",
+        "Items without known requirements are excluded from optimization when skill reqs are enforced"
+      ],
+      "passes": false,
+      "priority": "low"
+    },
+    {
       "id": "filter-001",
       "category": "algorithm",
       "description": "Equipment can be filtered by slot",

@@ -157,6 +157,13 @@ const optimize: Handler<WorkerRequestType.OPTIMIZE> = async (data) => {
     }
   }
 
+  // DEBUG: Log skill requirements info
+  console.debug('[OPT-DEBUG] Raw constraints:', rawConstraints);
+  console.debug('[OPT-DEBUG] Processed constraints:', constraints);
+  console.debug('[OPT-DEBUG] enforceSkillReqs:', constraints?.enforceSkillReqs);
+  console.debug('[OPT-DEBUG] playerSkills:', constraints?.playerSkills);
+  console.debug('[OPT-DEBUG] Player skills from request:', player.skills);
+
   const start = self.performance.now();
   const result = optimizeLoadout(player, monster, { combatStyle, objective, constraints });
   const end = self.performance.now();

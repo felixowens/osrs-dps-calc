@@ -9,12 +9,32 @@ import {
 } from '@/types/Optimizer';
 import {
   AmmoApplicability, ammoApplicability, availableEquipment, calculateEquipmentBonusesFromGear,
+  equipmentAliases,
 } from '@/lib/Equipment';
 import { BLOWPIPE_IDS } from '@/lib/constants';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 import { EquipmentCategory } from '@/enums/EquipmentCategory';
 import { getCombatStylesForCategory } from '@/utils';
 import equipmentRequirementsData from '../../cdn/json/equipment-requirements.json';
+
+/**
+ * Reverse lookup map: variant item ID -> base item ID.
+ * Built from equipmentAliases which maps base -> variants[].
+ */
+const variantToBaseMap: Map<number, number> = new Map();
+for (const [baseIdStr, variantIds] of Object.entries(equipmentAliases)) {
+  const baseId = parseInt(baseIdStr);
+  for (const variantId of variantIds) {
+    variantToBaseMap.set(variantId, baseId);
+  }
+}
+
+/**
+ * Get the base item ID for a variant, or the original ID if not a variant.
+ */
+function getBaseItemId(itemId: number): number {
+  return variantToBaseMap.get(itemId) ?? itemId;
+}
 
 /**
  * Check if an equipment piece has any melee offensive bonuses.
@@ -406,13 +426,51 @@ export function areRequirementsLoaded(): boolean {
 }
 
 /**
+ * Check if an item has known requirements in the requirements store.
+ * Returns true if the item (or its base item via alias) is in the requirements store.
+ *
+ * @param itemId - The item's ID
+ * @returns True if requirements are known for this item
+ */
+export function hasKnownRequirements(itemId: number): boolean {
+  // Check direct requirements
+  if (requirementsStore.has(itemId)) {
+    return true;
+  }
+
+  // Check if it's a variant with a base item that has requirements
+  const baseId = getBaseItemId(itemId);
+  if (baseId !== itemId) {
+    return requirementsStore.has(baseId);
+  }
+
+  return false;
+}
+
+// Set to track items we've already warned about (to avoid spam)
+const warnedMissingRequirements: Set<number> = new Set();
+
+/**
  * Get the skill requirements for an item.
+ * If the item is a variant (ornament kit, locked version, etc.), looks up the base item's requirements.
  *
  * @param itemId - The item's ID
  * @returns SkillRequirements object, or undefined if no requirements exist (item has no skill requirements)
  */
 export function getItemRequirements(itemId: number): SkillRequirements | undefined {
-  return requirementsStore.get(itemId);
+  // First check if this item has requirements directly
+  const directReqs = requirementsStore.get(itemId);
+  if (directReqs) {
+    return directReqs;
+  }
+
+  // If not, check if it's a variant and look up the base item's requirements
+  const baseId = getBaseItemId(itemId);
+  if (baseId !== itemId) {
+    return requirementsStore.get(baseId);
+  }
+
+  return undefined;
 }
 
 /**
@@ -479,6 +537,7 @@ export function playerMeetsItemRequirements(playerSkills: PlayerSkills, item: Eq
  * Filter equipment by skill requirements.
  *
  * Returns only items that the player can equip based on their skill levels.
+ * Items without known requirements in the requirements store are excluded and logged as warnings.
  *
  * @param playerSkills - The player's skill levels
  * @param equipment - Optional array of equipment to filter. Defaults to all available equipment.
@@ -498,7 +557,20 @@ export function filterBySkillRequirements(
   playerSkills: PlayerSkills,
   equipment: EquipmentPiece[] = availableEquipment,
 ): EquipmentPiece[] {
-  return equipment.filter((item) => playerMeetsRequirements(playerSkills, item.id));
+  return equipment.filter((item) => {
+    // First check if we have known requirements for this item
+    if (!hasKnownRequirements(item.id)) {
+      // Log warning once per item
+      if (!warnedMissingRequirements.has(item.id)) {
+        warnedMissingRequirements.add(item.id);
+        console.warn(`[OPT-WARN] Item "${item.name}" (id: ${item.id}) has no requirements entry - excluding from optimization`);
+      }
+      return false;
+    }
+
+    // Check if player meets the requirements
+    return playerMeetsRequirements(playerSkills, item.id);
+  });
 }
 
 /**
@@ -2474,8 +2546,15 @@ export function optimizeLoadout(
   }
 
   // Pre-filter equipment by skill requirements if enforced
+  console.debug('[OPT-DEBUG] In optimizeLoadout - enforceSkillReqs:', constraints?.enforceSkillReqs);
+  console.debug('[OPT-DEBUG] In optimizeLoadout - playerSkills:', constraints?.playerSkills);
+  console.debug('[OPT-DEBUG] Requirements store loaded:', areRequirementsLoaded(), 'size:', getRequirementsStoreSize());
   if (constraints?.enforceSkillReqs && constraints.playerSkills) {
+    const beforeCount = candidatePool.length;
     candidatePool = filterBySkillRequirements(constraints.playerSkills, candidatePool);
+    console.debug(`[OPT-DEBUG] Filtered by skill reqs: ${beforeCount} -> ${candidatePool.length} items`);
+  } else {
+    console.debug('[OPT-DEBUG] Skill requirements filtering SKIPPED');
   }
 
   // Group candidates by slot for faster lookup
@@ -2519,6 +2598,16 @@ export function optimizeLoadout(
   // Apply weapon+shield result
   optimizedEquipment.weapon = weaponShieldResult.weapon;
   optimizedEquipment.shield = weaponShieldResult.shield; // null for 2H weapons
+
+  // DEBUG: Log selected weapon and its requirements
+  if (weaponShieldResult.weapon) {
+    const weaponId = weaponShieldResult.weapon.id;
+    const baseId = getBaseItemId(weaponId);
+    const weaponReqs = getItemRequirements(weaponId);
+    console.debug(`[OPT-DEBUG] Selected weapon: ${weaponShieldResult.weapon.name} (id: ${weaponId})`);
+    console.debug(`[OPT-DEBUG] Base item ID: ${baseId} (${baseId === weaponId ? 'same' : 'aliased'})`);
+    console.debug('[OPT-DEBUG] Weapon requirements:', weaponReqs);
+  }
 
   // Update current player with weapon
   if (weaponShieldResult.weapon) {
