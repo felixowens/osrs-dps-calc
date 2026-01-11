@@ -1601,3 +1601,59 @@ The slayer task setting is already fully functional through the existing DPS cal
 
 **Next feature to work on:** weapon-002 (powered staves) or weapon-003 (crossbow bolt selection)
 
+---
+
+## 2026-01-11 (weapon-002)
+
+**Feature completed:** weapon-002 - Powered staves are handled correctly
+
+**What was implemented:**
+- Added `isPoweredStaff(item)` helper function to detect powered staves/wands:
+  - Checks if item.category is POWERED_STAFF or POWERED_WAND
+  - Returns false for null/undefined items
+- Modified `createPlayerWithEquipment()` to handle weapon slot changes:
+  - When swapping to any weapon, updates player.style to match the weapon's category
+  - Uses `getCombatStylesForCategory()` to get appropriate styles
+  - For powered staves/wands, clears player.spell (they use built-in spells)
+- Added imports for `EquipmentCategory` and `getCombatStylesForCategory`
+- Added 12 comprehensive tests for powered staff handling:
+  - isPoweredStaff detection (trident, sanguinesti, tumeken's shadow)
+  - isPoweredStaff rejection (staff of the dead, whip, tbow, null)
+  - createPlayerWithEquipment setting magic style for powered staves
+  - createPlayerWithEquipment clearing spell for powered staves
+  - Powered staves have positive DPS
+  - Powered staves can be evaluated by optimizer
+  - Powered staves are selected when optimizing for magic
+  - Ammo slot is null when powered staff is selected
+  - Powered staves have correct EquipmentCategory
+  - filterByCombatStyle includes powered staves for magic
+  - Powered staff DPS scales with magic level
+
+**Verification:**
+- All 296 Optimizer tests pass (12 new tests added)
+- ESLint passes with no errors
+- Powered staves now correctly:
+  - Use magic attack style automatically when equipped
+  - Use their built-in spell damage formula (no separate spell needed)
+  - Have ammo slot set to null (don't use ammunition)
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (added isPoweredStaff, modified createPlayerWithEquipment)
+- `src/tests/lib/Optimizer.test.ts` (added 12 tests for weapon-002)
+- `meta/optimizer-features.json` (marked weapon-002 as passing)
+
+**Commit:** 4a26227b
+
+**Notes for next agent:**
+- The key insight is that `createPlayerWithEquipment` now updates player.style for all weapons
+  - This ensures the DPS calculator uses the correct attack style for each weapon type
+  - For powered staves, this means type: 'magic' and stance: 'Accurate'
+- The spell is cleared for powered staves because:
+  - PlayerVsNPCCalc checks weapon names (trident, sang, etc.) and applies built-in spell formulas
+  - If spell is not null, it would try to use the spell's max_hit instead
+- The existing ammo handling already set ammo to null for non-ammo-requiring weapons
+- Remaining weapon feature:
+  - weapon-003: Crossbow bolt selection
+
+**Next feature to work on:** weapon-003 (crossbow bolt selection) or other features
+
