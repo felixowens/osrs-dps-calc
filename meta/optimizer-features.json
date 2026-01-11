@@ -182,7 +182,7 @@
         "Inquisitor's set is detected and evaluated",
         "Obsidian set is detected and evaluated"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

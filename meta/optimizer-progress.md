@@ -1423,3 +1423,61 @@ The slayer task setting is already fully functional through the existing DPS cal
   - edge cases: edge-001 through edge-004
 
 **Next feature to work on:** ui-009 or worker-002 (progress reporting) or opt-006 (set bonus detection)
+
+---
+
+## 2026-01-11 (opt-006)
+
+**Feature completed:** opt-006 - Optimizer detects set bonus opportunities
+
+**What was implemented:**
+- Added `SetBonusType`, `SetBonusDefinition`, and `SetBonusDetectionResult` types to `src/types/Optimizer.ts`
+- Added comprehensive set bonus definitions for all OSRS armor sets in `src/lib/Optimizer.ts`:
+  - Void Knight (melee, ranged, magic) - 4 piece sets with specific helms
+  - Elite Void (ranged, magic) - upgraded void with elite top/robe
+  - Inquisitor's set - 3 piece crush damage bonus
+  - Obsidian set - 3 piece with Tzhaar weapon requirement
+- Added set detection functions:
+  - `getSetBonusDefinition(type)` - Get definition for a set type
+  - `getSetBonusesForStyle(style)` - Get all sets for a combat style
+  - `isSetComplete(setType, equipment)` - Check if set is equipped
+  - `detectSetBonus(setType, candidates, constraints?)` - Detect if a set is available from candidates
+  - `detectAllSetBonuses(candidates, style?, constraints?)` - Detect all available sets
+  - `getAvailableSetBonuses(candidates, style?, constraints?)` - Get list of available set types
+  - `buildSetLoadout(setType, candidates, constraints?)` - Build equipment loadout for a set
+- Added helper functions for special set requirements:
+  - `isObsidianEffectiveWithWeapon(weapon)` - Check if weapon benefits from Obsidian set
+  - `findTzhaarWeapon(candidates)` - Find a Tzhaar weapon for Obsidian set
+  - `isInquisitorEffectiveForPlayer(player)` - Check if player uses crush style
+  - `findInquisitorMace(candidates)` - Find Inquisitor's mace for enhanced bonus
+  - `findMatchingPiece(patterns, candidates)` - Find item matching name patterns
+  - `findAllMatchingPieces(patterns, candidates)` - Find all items matching patterns
+- Moved `groupBySlot` function earlier in file to avoid use-before-define
+- Added 38 comprehensive tests in `src/tests/lib/Optimizer.test.ts`:
+  - Tests for set bonus definitions (count, properties)
+  - Tests for getSetBonusDefinition and getSetBonusesForStyle
+  - Tests for findMatchingPiece and findAllMatchingPieces
+  - Tests for isSetComplete with various sets and missing pieces
+  - Tests for detectSetBonus with constraints (blacklist, skill requirements)
+  - Tests for detectAllSetBonuses and getAvailableSetBonuses
+  - Tests for buildSetLoadout with available and unavailable sets
+  - Tests for Obsidian and Inquisitor helper functions
+
+**Files changed:**
+- `src/types/Optimizer.ts` (added SetBonusType, SetBonusDefinition, SetBonusDetectionResult types)
+- `src/lib/Optimizer.ts` (added set bonus definitions and detection functions)
+- `src/tests/lib/Optimizer.test.ts` (added 38 tests for set bonus detection)
+- `meta/optimizer-features.json` (marked opt-006 as passing)
+
+**Commit:** 6aaf3a4a
+
+**Notes for next agent:**
+- Set bonus DETECTION is now complete - the optimizer can identify when sets are available
+- opt-007 (set bonus EVALUATION) is the next logical step - compare set DPS vs greedy BiS
+- The DPS calculator already handles set bonuses in PlayerVsNPCCalc (void, obsidian, inquisitor)
+- For opt-007, use buildSetLoadout() to get set pieces, then compare DPS against greedy result
+- Obsidian set only provides bonus with Tzhaar weapons - check with isObsidianEffectiveWithWeapon()
+- Inquisitor's only provides bonus with crush style - check with isInquisitorEffectiveForPlayer()
+- Item name matching uses partial case-insensitive matching to handle variants (ornament kits, etc.)
+
+**Next feature to work on:** opt-007 (set bonus evaluation) or worker-002/ui-009 (progress reporting)
