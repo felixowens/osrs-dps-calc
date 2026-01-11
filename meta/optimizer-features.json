@@ -109,7 +109,7 @@
         "Given player skills, return only equippable items",
         "All relevant skills are checked (attack, strength, defence, ranged, magic, prayer)"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

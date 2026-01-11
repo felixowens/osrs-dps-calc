@@ -1336,3 +1336,40 @@ The slayer task setting is already fully functional through the existing DPS cal
 - ui-008 (skill requirements toggle) can now use filterBySkillRequirements
 
 **Next feature to work on:** filter-005 - Equipment can be filtered by skill requirements
+
+---
+
+## 2026-01-11 (filter-005)
+
+**Feature completed:** filter-005 - Equipment can be filtered by skill requirements
+
+**What was implemented:**
+- This feature was already implemented as part of data-004
+- `filterBySkillRequirements(playerSkills, equipment?)` function exists in `src/lib/Optimizer.ts`
+- Returns only items that the player can equip based on their skill levels
+- All relevant skills are checked via SKILL_NAME_MAP:
+  - attack → atk
+  - strength → str
+  - defence → def
+  - ranged → ranged
+  - magic → magic
+  - prayer → prayer
+- Can be chained with other filters (filterBySlot, filterByCombatStyle, etc.)
+- 5 comprehensive tests already exist and pass
+
+**Verification:**
+- All 5 filterBySkillRequirements tests pass
+- Function correctly filters items based on player skills
+- Items with no requirements are always included
+
+**Files changed:**
+- `meta/optimizer-features.json` (marked filter-005 as passing)
+
+**Commit:** (pending)
+
+**Notes for next agent:**
+- The filter is ready for use in the optimizer when skill requirements enforcement is enabled
+- ui-008 (skill requirements toggle) should wire this filter into the optimization flow
+- The toggle should pass enforceSkillReqs flag to constraints, which triggers the filter
+
+**Next feature to work on:** ui-008 - User can toggle skill requirement enforcement
