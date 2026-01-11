@@ -14,7 +14,7 @@ import OptimizerResults, { ComparisonData } from '@/app/components/optimizer/Opt
 import {
   CombatStyle, OptimizationObjective, OptimizerProgress, OptimizerResult,
 } from '@/types/Optimizer';
-import { calculateLoadoutCost } from '@/lib/Optimizer';
+import { calculateLoadoutCost, fetchAndLoadPrices, arePricesLoaded } from '@/lib/Optimizer';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 import { useStore } from '@/state';
 import { useCalc } from '@/worker/CalcWorker';
@@ -80,6 +80,17 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
       calc.setOptimizeProgressCallback(undefined);
     };
   }, [isOpen, calc]);
+
+  // Load prices when modal opens (for tooltips and cost display)
+  useEffect(() => {
+    if (isOpen && !arePricesLoaded()) {
+      fetchAndLoadPrices().then((res) => {
+        if (res.success) {
+          console.debug(`Loaded ${res.itemCount} item prices for tooltips`);
+        }
+      });
+    }
+  }, [isOpen]);
 
   // Calculate comparison data from current loadout
   const comparisonData: ComparisonData | undefined = useMemo(() => {

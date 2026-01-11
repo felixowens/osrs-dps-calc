@@ -10,7 +10,7 @@ import {
 } from '@/types/Optimizer';
 import {
   AmmoApplicability, ammoApplicability, availableEquipment, calculateEquipmentBonusesFromGear,
-  equipmentAliases,
+  equipmentAliases, getCanonicalEquipment,
 } from '@/lib/Equipment';
 import { BLOWPIPE_IDS } from '@/lib/constants';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
@@ -2770,8 +2770,12 @@ export function optimizeLoadout(
     reportProgress('budget', 'Within budget');
   }
 
+  // Resolve any variant items to their base versions (e.g., "(or)" ornament kit versions)
+  // This ensures the optimizer returns the cheapest version of each item with identical stats
+  const canonicalEquipment = getCanonicalEquipment(finalEquipment);
+
   // Calculate final metrics with the complete loadout
-  const finalPlayer = createPlayerFromEquipment(player, finalEquipment, monster);
+  const finalPlayer = createPlayerFromEquipment(player, canonicalEquipment, monster);
   const calc = new PlayerVsNPCCalc(finalPlayer, monster);
   const dps = calc.getDps();
   const accuracy = calc.getHitChance();
@@ -2780,7 +2784,7 @@ export function optimizeLoadout(
   const endTime = performance.now();
 
   const result: OptimizerResult = {
-    equipment: finalEquipment,
+    equipment: canonicalEquipment,
     metrics: {
       dps,
       accuracy,
