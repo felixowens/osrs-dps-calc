@@ -10,6 +10,7 @@ import {
 import {
   AmmoApplicability, ammoApplicability, availableEquipment, calculateEquipmentBonusesFromGear,
 } from '@/lib/Equipment';
+import { BLOWPIPE_IDS } from '@/lib/constants';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 import equipmentRequirementsData from '../../cdn/json/equipment-requirements.json';
 
@@ -1573,6 +1574,166 @@ export function findBestAmmoForWeapon(
   return findBestItemForSlot('ammo', player, monster, validAmmo, constraints, objective);
 }
 
+// =============================================================================
+// BLOWPIPE DART SELECTION (weapon-001)
+// =============================================================================
+
+/**
+ * Check if an equipment piece is a blowpipe weapon.
+ *
+ * @param item - The equipment piece to check
+ * @returns True if the item is a blowpipe
+ */
+export function isBlowpipeWeapon(item: EquipmentPiece | null | undefined): boolean {
+  if (!item) return false;
+  return BLOWPIPE_IDS.includes(item.id);
+}
+
+/**
+ * Check if an equipment piece is a dart that can be used with blowpipes.
+ *
+ * Blowpipe darts are:
+ * - Equipment with slot "weapon" (darts are thrown weapons in the data)
+ * - Name ends with "dart" (case-insensitive)
+ * - NOT Atlatl dart (used with Eclipse atlatl, not blowpipe)
+ *
+ * @param item - The equipment piece to check
+ * @returns True if the item is a blowpipe-compatible dart
+ */
+export function isBlowpipeDart(item: EquipmentPiece): boolean {
+  const name = item.name.toLowerCase();
+  return (
+    item.slot === 'weapon'
+    && name.endsWith('dart')
+    && !name.includes('atlatl')
+  );
+}
+
+/**
+ * Get all dart items that can be used with blowpipes.
+ *
+ * @param equipment - Optional equipment array to filter. Defaults to availableEquipment.
+ * @returns Array of dart equipment pieces sorted by ranged_str descending
+ */
+export function getDartItems(equipment?: EquipmentPiece[]): EquipmentPiece[] {
+  const items = equipment ?? availableEquipment;
+  return items
+    .filter(isBlowpipeDart)
+    .sort((a, b) => b.bonuses.ranged_str - a.bonuses.ranged_str);
+}
+
+/**
+ * Create a blowpipe weapon with the specified dart set in itemVars.
+ *
+ * The returned blowpipe will have itemVars.blowpipeDartId and blowpipeDartName set.
+ * This is necessary for calculateEquipmentBonusesFromGear to add the dart's ranged_str.
+ *
+ * @param blowpipe - The blowpipe weapon piece
+ * @param dart - The dart to set in the blowpipe (or null/undefined to clear)
+ * @returns A new blowpipe with the dart set in itemVars
+ */
+export function createBlowpipeWithDart(
+  blowpipe: EquipmentPiece,
+  dart: EquipmentPiece | null | undefined,
+): EquipmentPiece {
+  return {
+    ...blowpipe,
+    itemVars: dart
+      ? { blowpipeDartId: dart.id, blowpipeDartName: dart.name }
+      : undefined,
+  };
+}
+
+/**
+ * Find the best dart for a blowpipe weapon.
+ *
+ * Given a blowpipe and the current player loadout, this function finds the
+ * dart that produces the highest score for the optimization objective.
+ *
+ * @param player - The base player loadout (with blowpipe already equipped)
+ * @param monster - The monster to optimize against
+ * @param dartCandidates - Candidate dart items (should be pre-filtered to valid darts)
+ * @param constraints - Optional constraints to apply
+ * @param objective - The optimization objective (dps, accuracy, max_hit). Defaults to 'dps'.
+ * @returns Object containing the best dart and evaluation results
+ */
+export function findBestDartForBlowpipe(
+  player: Player,
+  monster: Monster,
+  dartCandidates: EquipmentPiece[],
+  constraints?: OptimizerConstraints,
+  objective: OptimizationObjective = 'dps',
+): {
+  bestDart: EquipmentPiece | null;
+  score: number;
+  candidates: ItemEvaluation[];
+} {
+  const weapon = player.equipment.weapon;
+
+  if (!weapon || !isBlowpipeWeapon(weapon)) {
+    // Not a blowpipe, return empty result
+    const metrics = calculateMetrics(player, monster);
+    return {
+      bestDart: null,
+      score: getScoreForObjective(metrics, objective),
+      candidates: [],
+    };
+  }
+
+  // Filter darts
+  const validDarts = dartCandidates.filter(isBlowpipeDart);
+
+  // Apply constraints
+  const filteredDarts = constraints?.blacklistedItems
+    ? validDarts.filter((d) => !constraints.blacklistedItems!.has(d.id))
+    : validDarts;
+
+  // Apply skill requirements if enabled
+  const finalDarts = constraints?.enforceSkillReqs && constraints?.playerSkills
+    ? filteredDarts.filter((d) => playerMeetsItemRequirements(constraints.playerSkills!, d))
+    : filteredDarts;
+
+  if (finalDarts.length === 0) {
+    // No valid darts available
+    const metrics = calculateMetrics(player, monster);
+    return {
+      bestDart: null,
+      score: getScoreForObjective(metrics, objective),
+      candidates: [],
+    };
+  }
+
+  // Evaluate each dart by creating a blowpipe with that dart
+  const evaluations: ItemEvaluation[] = [];
+
+  for (const dart of finalDarts) {
+    // Create a blowpipe with this dart
+    const blowpipeWithDart = createBlowpipeWithDart(weapon, dart);
+
+    // Create a player with this blowpipe+dart combination
+    const testPlayer = createPlayerWithEquipment(player, 'weapon', blowpipeWithDart, monster);
+
+    // Calculate metrics
+    const metrics = calculateMetrics(testPlayer, monster);
+    const score = getScoreForObjective(metrics, objective);
+
+    evaluations.push({
+      item: dart,
+      dps: metrics.dps,
+      score,
+    });
+  }
+
+  // Sort by score descending
+  evaluations.sort((a, b) => b.score - a.score);
+
+  return {
+    bestDart: evaluations.length > 0 ? evaluations[0].item : null,
+    score: evaluations.length > 0 ? evaluations[0].score : 0,
+    candidates: evaluations,
+  };
+}
+
 /**
  * Find the best weapon+shield combination.
  *
@@ -2334,13 +2495,13 @@ export function optimizeLoadout(
     currentPlayer = createPlayerWithEquipment(currentPlayer, 'shield', weaponShieldResult.shield, monster);
   }
 
-  // Step 2: Optimize ammunition (must be done after weapon selection to know valid ammo types)
-  // Only if the selected weapon requires ammunition
+  // Step 2: Optimize ammunition or blowpipe darts
+  // Must be done after weapon selection to know valid ammo/dart types
   const ammoCandidates = candidatesBySlot.ammo;
   const weaponId = optimizedEquipment.weapon?.id;
 
   if (weaponId && weaponRequiresAmmo(weaponId)) {
-    // Filter to valid ammo for this weapon and find the best
+    // Regular ranged weapon - find the best ammo
     const ammoResult = findBestAmmoForWeapon(currentPlayer, monster, ammoCandidates, constraints, objective);
     totalEvaluations += ammoResult.candidates.length;
 
@@ -2349,8 +2510,23 @@ export function optimizeLoadout(
     if (ammoResult.bestItem) {
       currentPlayer = createPlayerWithEquipment(currentPlayer, 'ammo', ammoResult.bestItem, monster);
     }
+  } else if (isBlowpipeWeapon(optimizedEquipment.weapon)) {
+    // Blowpipe - find the best dart and set it in itemVars
+    // Darts are weapon-slot items, not ammo-slot items
+    const allDarts = getDartItems();
+    const dartResult = findBestDartForBlowpipe(currentPlayer, monster, allDarts, constraints, objective);
+    totalEvaluations += dartResult.candidates.length;
+
+    if (dartResult.bestDart && optimizedEquipment.weapon) {
+      // Create a new blowpipe with the selected dart in itemVars
+      optimizedEquipment.weapon = createBlowpipeWithDart(optimizedEquipment.weapon, dartResult.bestDart);
+      currentPlayer = createPlayerWithEquipment(currentPlayer, 'weapon', optimizedEquipment.weapon, monster);
+    }
+
+    // Blowpipes don't use the ammo slot for DPS contribution
+    optimizedEquipment.ammo = null;
   } else {
-    // Weapon doesn't require ammo, skip ammo slot (leave as null)
+    // Weapon doesn't require ammo (melee, powered staves, etc.)
     // Note: Some items could still be useful in ammo slot for defensive stats,
     // but for DPS optimization we skip them as they don't contribute
     optimizedEquipment.ammo = null;

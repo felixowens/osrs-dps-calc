@@ -7,6 +7,8 @@ import {
   isTwoHandedWeapon, filterOneHandedWeapons, filterTwoHandedWeapons, findBestWeaponShieldCombination,
   filterValidWeapons,
   weaponRequiresAmmo, isAmmoValidForWeapon, filterValidAmmoForWeapon, findBestAmmoForWeapon,
+  // Blowpipe dart selection (weapon-001)
+  isBlowpipeWeapon, isBlowpipeDart, getDartItems, createBlowpipeWithDart, findBestDartForBlowpipe,
   // Price store functions
   setItemPrice, setItemPrices, setItemUntradeable, clearPriceStore,
   getItemPrice, getItemPriceInfo, getEffectivePrice, isItemWithinBudget,
@@ -33,6 +35,8 @@ import {
 import { SetBonusType } from '@/types/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
+import { getCombatStylesForCategory } from '@/utils';
+import { EquipmentCategory } from '@/enums/EquipmentCategory';
 
 describe('Optimizer', () => {
   describe('filterBySlot', () => {
@@ -3693,6 +3697,276 @@ describe('Optimizer', () => {
             candidatesBySlot,
           );
           expect(result.isValid).toBe(false);
+        }
+      });
+    });
+  });
+
+  // =============================================================================
+  // BLOWPIPE DART SELECTION (weapon-001)
+  // =============================================================================
+  describe('Blowpipe dart selection (weapon-001)', () => {
+    // Test data setup - use availableEquipment.find for more flexible matching
+    // Darts have versions: Unpoisoned, Poison, Poison+, Poison++
+    const toxicBlowpipe = availableEquipment.find((e) => e.name === 'Toxic blowpipe' && e.version === 'Charged');
+    const blazingBlowpipe = availableEquipment.find((e) => e.name === 'Blazing blowpipe');
+    const dragonDart = availableEquipment.find((e) => e.name === 'Dragon dart' && e.version === 'Unpoisoned');
+    const runeDart = availableEquipment.find((e) => e.name === 'Rune dart' && e.version === 'Unpoisoned');
+    const adamantDart = availableEquipment.find((e) => e.name === 'Adamant dart' && e.version === 'Unpoisoned');
+    const bronzeDart = availableEquipment.find((e) => e.name === 'Bronze dart' && e.version === 'Unpoisoned');
+    const atlatDart = availableEquipment.find((e) => e.name === 'Atlatl dart');
+    const abyssalWhip = findEquipment('Abyssal whip');
+    const twistedBow = findEquipment('Twisted bow');
+
+    describe('isBlowpipeWeapon', () => {
+      test('returns true for Toxic blowpipe', () => {
+        expect(isBlowpipeWeapon(toxicBlowpipe)).toBe(true);
+      });
+
+      test('returns true for Blazing blowpipe', () => {
+        expect(isBlowpipeWeapon(blazingBlowpipe)).toBe(true);
+      });
+
+      test('returns false for non-blowpipe weapons', () => {
+        expect(isBlowpipeWeapon(abyssalWhip)).toBe(false);
+        expect(isBlowpipeWeapon(twistedBow)).toBe(false);
+      });
+
+      test('returns false for null/undefined', () => {
+        expect(isBlowpipeWeapon(null)).toBe(false);
+        expect(isBlowpipeWeapon(undefined)).toBe(false);
+      });
+    });
+
+    describe('isBlowpipeDart', () => {
+      test('returns true for Dragon dart', () => {
+        expect(isBlowpipeDart(dragonDart!)).toBe(true);
+      });
+
+      test('returns true for Rune dart', () => {
+        expect(isBlowpipeDart(runeDart!)).toBe(true);
+      });
+
+      test('returns true for Adamant dart', () => {
+        expect(isBlowpipeDart(adamantDart!)).toBe(true);
+      });
+
+      test('returns true for Bronze dart', () => {
+        expect(isBlowpipeDart(bronzeDart!)).toBe(true);
+      });
+
+      test('returns false for Atlatl dart (not for blowpipes)', () => {
+        expect(isBlowpipeDart(atlatDart!)).toBe(false);
+      });
+
+      test('returns false for non-dart weapons', () => {
+        expect(isBlowpipeDart(abyssalWhip!)).toBe(false);
+        expect(isBlowpipeDart(toxicBlowpipe!)).toBe(false);
+      });
+    });
+
+    describe('getDartItems', () => {
+      test('returns an array of darts', () => {
+        const darts = getDartItems();
+        expect(darts.length).toBeGreaterThan(0);
+        expect(darts.every((d) => isBlowpipeDart(d))).toBe(true);
+      });
+
+      test('darts are sorted by ranged_str descending', () => {
+        const darts = getDartItems();
+        for (let i = 1; i < darts.length; i++) {
+          expect(darts[i - 1].bonuses.ranged_str).toBeGreaterThanOrEqual(darts[i].bonuses.ranged_str);
+        }
+      });
+
+      test('includes all expected dart types', () => {
+        const darts = getDartItems();
+        const dartNames = darts.map((d) => d.name);
+        expect(dartNames).toContain('Dragon dart');
+        expect(dartNames).toContain('Rune dart');
+        expect(dartNames).toContain('Adamant dart');
+        expect(dartNames).toContain('Bronze dart');
+      });
+
+      test('excludes Atlatl dart', () => {
+        const darts = getDartItems();
+        const hasAtlatl = darts.some((d) => d.name.includes('Atlatl'));
+        expect(hasAtlatl).toBe(false);
+      });
+
+      test('Dragon dart has highest ranged_str among standard darts', () => {
+        const darts = getDartItems();
+        const dragonDarts = darts.filter((d) => d.name === 'Dragon dart');
+        const standardDarts = darts.filter((d) => !d.name.includes('Amethyst'));
+        if (standardDarts.length > 0) {
+          const maxRangedStr = Math.max(...standardDarts.map((d) => d.bonuses.ranged_str));
+          expect(dragonDarts.every((d) => d.bonuses.ranged_str === maxRangedStr)).toBe(true);
+        }
+      });
+    });
+
+    describe('createBlowpipeWithDart', () => {
+      test('sets itemVars with dart info', () => {
+        const result = createBlowpipeWithDart(toxicBlowpipe!, dragonDart!);
+        expect(result.itemVars).toBeDefined();
+        expect(result.itemVars?.blowpipeDartId).toBe(dragonDart!.id);
+        expect(result.itemVars?.blowpipeDartName).toBe(dragonDart!.name);
+      });
+
+      test('preserves original blowpipe properties', () => {
+        const result = createBlowpipeWithDart(toxicBlowpipe!, dragonDart!);
+        expect(result.id).toBe(toxicBlowpipe!.id);
+        expect(result.name).toBe(toxicBlowpipe!.name);
+        expect(result.slot).toBe('weapon');
+        expect(result.bonuses.ranged_str).toBe(toxicBlowpipe!.bonuses.ranged_str);
+      });
+
+      test('clears itemVars when dart is null', () => {
+        const result = createBlowpipeWithDart(toxicBlowpipe!, null);
+        expect(result.itemVars).toBeUndefined();
+      });
+
+      test('clears itemVars when dart is undefined', () => {
+        const result = createBlowpipeWithDart(toxicBlowpipe!, undefined);
+        expect(result.itemVars).toBeUndefined();
+      });
+    });
+
+    describe('findBestDartForBlowpipe', () => {
+      test('returns best dart for blowpipe user', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+        // Equip blowpipe first
+        const blowpipePlayer = createPlayerWithEquipment(player, 'weapon', toxicBlowpipe!, monster);
+        const darts = getDartItems();
+
+        const result = findBestDartForBlowpipe(blowpipePlayer, monster, darts);
+
+        expect(result.bestDart).not.toBeNull();
+        expect(result.score).toBeGreaterThan(0);
+        expect(result.candidates.length).toBeGreaterThan(0);
+      });
+
+      test('returns null for non-blowpipe user', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+        const whipPlayer = createPlayerWithEquipment(player, 'weapon', abyssalWhip!, monster);
+        const darts = getDartItems();
+
+        const result = findBestDartForBlowpipe(whipPlayer, monster, darts);
+
+        expect(result.bestDart).toBeNull();
+        expect(result.candidates).toHaveLength(0);
+      });
+
+      test('higher ranged_str darts produce higher DPS', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+        const blowpipePlayer = createPlayerWithEquipment(player, 'weapon', toxicBlowpipe!, monster);
+        const darts = getDartItems();
+
+        const result = findBestDartForBlowpipe(blowpipePlayer, monster, darts);
+
+        // Best dart should be Dragon dart (highest ranged_str) or similar
+        expect(result.bestDart).not.toBeNull();
+        // First candidate should be the best
+        if (result.candidates.length > 1) {
+          expect(result.candidates[0].score).toBeGreaterThanOrEqual(result.candidates[1].score);
+        }
+      });
+
+      test('respects blacklist constraints', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+        const blowpipePlayer = createPlayerWithEquipment(player, 'weapon', toxicBlowpipe!, monster);
+        const darts = getDartItems();
+
+        // Blacklist ALL dragon darts (there are 4 variants: Unpoisoned, Poison, Poison+, Poison++)
+        const dragonDartIds = darts.filter((d) => d.name === 'Dragon dart').map((d) => d.id);
+        const constraints = {
+          blacklistedItems: new Set(dragonDartIds),
+        };
+
+        const result = findBestDartForBlowpipe(blowpipePlayer, monster, darts, constraints);
+
+        expect(result.bestDart).not.toBeNull();
+        expect(result.bestDart!.name).not.toBe('Dragon dart');
+      });
+
+      test('returns empty result when all darts are blacklisted', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+        const blowpipePlayer = createPlayerWithEquipment(player, 'weapon', toxicBlowpipe!, monster);
+        const darts = getDartItems();
+
+        // Blacklist all darts
+        const allDartIds = new Set(darts.map((d) => d.id));
+        const constraints = {
+          blacklistedItems: allDartIds,
+        };
+
+        const result = findBestDartForBlowpipe(blowpipePlayer, monster, darts, constraints);
+
+        expect(result.bestDart).toBeNull();
+        expect(result.candidates).toHaveLength(0);
+      });
+    });
+
+    describe('optimizeLoadout with blowpipe', () => {
+      test('selects best dart when blowpipe is optimal', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+
+        // Optimize for ranged with blowpipe as an option
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'ranged',
+        });
+
+        // If blowpipe is selected, it should have dart set
+        if (result.equipment.weapon && isBlowpipeWeapon(result.equipment.weapon)) {
+          expect(result.equipment.weapon.itemVars).toBeDefined();
+          expect(result.equipment.weapon.itemVars?.blowpipeDartId).toBeDefined();
+          expect(result.equipment.weapon.itemVars?.blowpipeDartName).toBeDefined();
+        }
+      });
+
+      test('blowpipe dart affects DPS calculation', () => {
+        const monster = getTestMonster();
+        // Create a player with ranged style for proper DPS calculation
+        const rangedStyle = getCombatStylesForCategory(EquipmentCategory.THROWN)[0];
+        const player = getTestPlayer(monster, { style: rangedStyle });
+
+        // Create a player with blowpipe without dart
+        const blowpipeNoDart = { ...toxicBlowpipe!, itemVars: undefined };
+        const playerNoDart = createPlayerWithEquipment(player, 'weapon', blowpipeNoDart, monster);
+
+        // Create a player with blowpipe with dragon dart
+        const blowpipeWithDart = createBlowpipeWithDart(toxicBlowpipe!, dragonDart!);
+        const playerWithDart = createPlayerWithEquipment(player, 'weapon', blowpipeWithDart, monster);
+
+        // Calculate DPS for both
+        const dpsNoDart = calculateDps(playerNoDart, monster);
+        const dpsWithDart = calculateDps(playerWithDart, monster);
+
+        // With dart should have higher DPS due to added ranged_str
+        expect(dpsWithDart).toBeGreaterThan(dpsNoDart);
+      });
+
+      test('ammo slot is null when blowpipe is selected', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+
+        // Equip blowpipe
+        const blowpipePlayer = createPlayerWithEquipment(player, 'weapon', toxicBlowpipe!, monster);
+
+        const result = optimizeLoadout(blowpipePlayer, monster, {
+          combatStyle: 'ranged',
+        });
+
+        // If blowpipe is selected, ammo slot should be null
+        // (blowpipe darts are stored in itemVars, not ammo slot)
+        if (result.equipment.weapon && isBlowpipeWeapon(result.equipment.weapon)) {
+          expect(result.equipment.ammo).toBeNull();
         }
       });
     });
