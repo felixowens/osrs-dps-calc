@@ -992,6 +992,96 @@ describe('Optimizer', () => {
         expect(resultAbyssal.metrics.dps).not.toBe(resultCorp.metrics.dps);
       });
     });
+
+    describe('progress callback (worker-002)', () => {
+      test('calls onProgress callback during optimization', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const progressUpdates: { phase: string; progress: number }[] = [];
+        const onProgress = jest.fn((update: { phase: string; progress: number }) => {
+          progressUpdates.push({ phase: update.phase, progress: update.progress });
+        });
+
+        optimizeLoadout(player, monster, { combatStyle: 'melee', onProgress });
+
+        // Should have been called multiple times
+        expect(onProgress).toHaveBeenCalled();
+        expect(progressUpdates.length).toBeGreaterThan(5);
+
+        // Should start with initializing phase
+        expect(progressUpdates[0].phase).toBe('initializing');
+
+        // Should end with complete phase at 100%
+        const lastUpdate = progressUpdates[progressUpdates.length - 1];
+        expect(lastUpdate.phase).toBe('complete');
+        expect(lastUpdate.progress).toBe(100);
+
+        // Progress should increase monotonically
+        for (let i = 1; i < progressUpdates.length; i++) {
+          expect(progressUpdates[i].progress).toBeGreaterThanOrEqual(progressUpdates[i - 1].progress);
+        }
+      });
+
+      test('onProgress receives all expected phases', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        const phases: Set<string> = new Set();
+        const onProgress = jest.fn((update: { phase: string }) => {
+          phases.add(update.phase);
+        });
+
+        optimizeLoadout(player, monster, { combatStyle: 'melee', onProgress });
+
+        // Should include all major phases
+        expect(phases.has('initializing')).toBe(true);
+        expect(phases.has('filtering')).toBe(true);
+        expect(phases.has('weapons')).toBe(true);
+        expect(phases.has('ammunition')).toBe(true);
+        expect(phases.has('slots')).toBe(true);
+        expect(phases.has('set_bonuses')).toBe(true);
+        expect(phases.has('budget')).toBe(true);
+        expect(phases.has('complete')).toBe(true);
+      });
+
+      test('onProgress includes final result in complete phase', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        let completeUpdate: { currentBest?: { metrics: { dps: number } } } | null = null;
+        const onProgress = jest.fn((update: { phase: string; currentBest?: { metrics: { dps: number } } }) => {
+          if (update.phase === 'complete') {
+            completeUpdate = update;
+          }
+        });
+
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee', onProgress });
+
+        expect(completeUpdate).not.toBeNull();
+        expect(completeUpdate!.currentBest).toBeDefined();
+        expect(completeUpdate!.currentBest!.metrics.dps).toBe(result.metrics.dps);
+      });
+
+      test('optimization works correctly without onProgress callback', () => {
+        const monster = getTestMonster('Abyssal demon');
+        const player = getTestPlayer(monster, {
+          equipment: { weapon: abyssalWhip },
+        });
+
+        // Should work fine without callback
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        expect(result.metrics.dps).toBeGreaterThan(0);
+        expect(result.equipment.weapon).toBeDefined();
+      });
+    });
   });
 
   describe('Two-handed weapon handling (opt-004)', () => {

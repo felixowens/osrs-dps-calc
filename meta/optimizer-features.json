@@ -292,7 +292,7 @@
         "Current phase is reported (filtering, evaluating, etc.)",
         "Current best result is available during optimization"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

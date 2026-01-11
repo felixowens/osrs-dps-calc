@@ -4,7 +4,8 @@ import {
 import { Monster } from '@/types/Monster';
 import {
   CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation, ItemPrice,
-  OptimizationObjective, OptimizerConstraints, OptimizerResult, SetBonusDefinition,
+  OptimizationObjective, OptimizerConstraints, OptimizerPhase,
+  OptimizerProgressCallback, OptimizerResult, SetBonusDefinition,
   SetBonusDetectionResult, SetBonusType, SkillRequirements, SlotOptimizationResult,
 } from '@/types/Optimizer';
 import {
@@ -2471,6 +2472,8 @@ export interface OptimizeLoadoutOptions {
   objective?: OptimizationObjective;
   /** Constraints to apply during optimization */
   constraints?: OptimizerConstraints;
+  /** Callback for progress updates during optimization */
+  onProgress?: OptimizerProgressCallback;
 }
 
 /**
@@ -2537,7 +2540,32 @@ export function optimizeLoadout(
   const startTime = performance.now();
   let totalEvaluations = 0;
 
-  const { combatStyle, objective = 'dps', constraints } = options;
+  const {
+    combatStyle, objective = 'dps', constraints, onProgress,
+  } = options;
+
+  // Progress tracking
+  // Total steps: 1 init + 1 filter + 1 weapon + 1 ammo + 8 slots + 1 sets + 1 budget + 1 complete = 15
+  const totalSteps = 15;
+  let currentStep = 0;
+
+  const reportProgress = (phase: OptimizerPhase, message?: string, currentBest?: OptimizerResult) => {
+    if (onProgress) {
+      currentStep += 1;
+      const progress = Math.round((currentStep / totalSteps) * 100);
+      onProgress({
+        phase,
+        progress: Math.min(progress, 100),
+        currentStep,
+        totalSteps,
+        message,
+        currentBest,
+      });
+    }
+  };
+
+  // Report initialization
+  reportProgress('initializing', 'Starting optimization...');
 
   // Pre-filter equipment by combat style if specified
   let candidatePool = availableEquipment;
@@ -2559,6 +2587,9 @@ export function optimizeLoadout(
 
   // Group candidates by slot for faster lookup
   const candidatesBySlot = groupBySlot(candidatePool);
+
+  // Report filtering complete
+  reportProgress('filtering', `Filtered to ${candidatePool.length} candidates`);
 
   // Start with a copy of the player to track progressive equipment changes
   let currentPlayer = { ...player };
@@ -2619,6 +2650,10 @@ export function optimizeLoadout(
     currentPlayer = createPlayerWithEquipment(currentPlayer, 'shield', weaponShieldResult.shield, monster);
   }
 
+  // Report weapon optimization complete
+  const weaponName = weaponShieldResult.weapon?.name || 'None';
+  reportProgress('weapons', `Selected ${weaponName}${weaponShieldResult.is2H ? ' (2H)' : ''}`);
+
   // Step 2: Optimize ammunition or blowpipe darts
   // Must be done after weapon selection to know valid ammo/dart types
   const ammoCandidates = candidatesBySlot.ammo;
@@ -2634,6 +2669,7 @@ export function optimizeLoadout(
     if (ammoResult.bestItem) {
       currentPlayer = createPlayerWithEquipment(currentPlayer, 'ammo', ammoResult.bestItem, monster);
     }
+    reportProgress('ammunition', `Selected ${ammoResult.bestItem?.name || 'None'}`);
   } else if (isBlowpipeWeapon(optimizedEquipment.weapon)) {
     // Blowpipe - find the best dart and set it in itemVars
     // Darts are weapon-slot items, not ammo-slot items
@@ -2649,11 +2685,13 @@ export function optimizeLoadout(
 
     // Blowpipes don't use the ammo slot for DPS contribution
     optimizedEquipment.ammo = null;
+    reportProgress('ammunition', `Selected ${dartResult.bestDart?.name || 'None'} dart`);
   } else {
     // Weapon doesn't require ammo (melee, powered staves, etc.)
     // Note: Some items could still be useful in ammo slot for defensive stats,
     // but for DPS optimization we skip them as they don't contribute
     optimizedEquipment.ammo = null;
+    reportProgress('ammunition', 'No ammunition needed');
   }
 
   // Step 3: Optimize remaining slots (excluding weapon, shield, and ammo)
@@ -2672,6 +2710,9 @@ export function optimizeLoadout(
     if (result.bestItem) {
       currentPlayer = createPlayerWithEquipment(currentPlayer, slot, result.bestItem, monster);
     }
+
+    // Report progress for each slot
+    reportProgress('slots', `Optimized ${slot}: ${result.bestItem?.name || 'None'}`);
   }
 
   // Step 4 (opt-007): Compare set bonuses vs greedy result
@@ -2696,6 +2737,9 @@ export function optimizeLoadout(
   if (bestSetResult) {
     // A set bonus loadout beat the greedy result
     bestEquipment = bestSetResult.equipment;
+    reportProgress('set_bonuses', `Using ${bestSetResult.setType || 'set'} bonus loadout`);
+  } else {
+    reportProgress('set_bonuses', 'No set bonus better than individual items');
   }
 
   // Step 5: Apply budget constraint if specified
@@ -2714,6 +2758,9 @@ export function optimizeLoadout(
     );
     finalEquipment = budgetResult.equipment;
     costInfo = budgetResult.cost;
+    reportProgress('budget', `Adjusted to fit budget (${costInfo.total} GP)`);
+  } else {
+    reportProgress('budget', 'Within budget');
   }
 
   // Calculate final metrics with the complete loadout
@@ -2725,7 +2772,7 @@ export function optimizeLoadout(
 
   const endTime = performance.now();
 
-  return {
+  const result: OptimizerResult = {
     equipment: finalEquipment,
     metrics: {
       dps,
@@ -2738,4 +2785,9 @@ export function optimizeLoadout(
       timeMs: endTime - startTime,
     },
   };
+
+  // Report completion with final result
+  reportProgress('complete', 'Optimization complete', result);
+
+  return result;
 }

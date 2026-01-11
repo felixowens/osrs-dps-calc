@@ -14,7 +14,7 @@ import NPCVsPlayerCalc from '@/lib/NPCVsPlayerCalc';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 import Comparator from '@/lib/Comparator';
 import { optimizeLoadout, arePricesLoaded, fetchAndLoadPrices } from '@/lib/Optimizer';
-import { OptimizerConstraints } from '@/types/Optimizer';
+import { OptimizerConstraints, OptimizerProgress } from '@/types/Optimizer';
 import { ttkDist } from '@/worker/ttkWorker';
 import { range } from 'd3-array';
 import { DeferredPromise } from '@/utils';
@@ -115,10 +115,11 @@ const compare: Handler<WorkerRequestType.COMPARE> = async (data) => {
  * Note: Constraints with Set types (blacklistedItems, ownedItems) are serialized
  * as arrays when sent to the worker, so we need to convert them back to Sets here.
  */
-const optimize: Handler<WorkerRequestType.OPTIMIZE> = async (data) => {
+const optimize: Handler<WorkerRequestType.OPTIMIZE> = async (data, rawRequest) => {
   const {
     player, monster, combatStyle, objective, constraints: rawConstraints,
   } = data;
+  const { sequenceId } = rawRequest;
 
   // Load prices if not already loaded (first optimization run)
   if (!arePricesLoaded()) {
@@ -164,8 +165,21 @@ const optimize: Handler<WorkerRequestType.OPTIMIZE> = async (data) => {
   console.debug('[OPT-DEBUG] playerSkills:', constraints?.playerSkills);
   console.debug('[OPT-DEBUG] Player skills from request:', player.skills);
 
+  // Progress callback that sends updates to the main thread
+  const onProgress = (progress: OptimizerProgress) => {
+    // Send progress message to main thread
+    const progressRes = {
+      type: WorkerRequestType.OPTIMIZE_PROGRESS,
+      sequenceId: sequenceId!,
+      payload: progress,
+    };
+    self.postMessage(JSON.stringify(progressRes, WORKER_JSON_REPLACER));
+  };
+
   const start = self.performance.now();
-  const result = optimizeLoadout(player, monster, { combatStyle, objective, constraints });
+  const result = optimizeLoadout(player, monster, {
+    combatStyle, objective, constraints, onProgress,
+  });
   const end = self.performance.now();
 
   console.debug(`Optimization took ${end - start}ms, ${result.meta.evaluations} evaluations`);

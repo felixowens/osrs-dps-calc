@@ -153,6 +153,42 @@ export interface SetBonusDetectionResult {
 }
 
 /**
+ * Optimization phases for progress reporting.
+ */
+export type OptimizerPhase =
+  | 'initializing'
+  | 'filtering'
+  | 'weapons'
+  | 'ammunition'
+  | 'slots'
+  | 'set_bonuses'
+  | 'budget'
+  | 'complete';
+
+/**
+ * Progress update during optimization.
+ */
+export interface OptimizerProgress {
+  /** Current phase of optimization */
+  phase: OptimizerPhase;
+  /** Overall progress percentage (0-100) */
+  progress: number;
+  /** Current step number */
+  currentStep: number;
+  /** Total number of steps */
+  totalSteps: number;
+  /** Optional message describing current activity */
+  message?: string;
+  /** Current best result (available during later phases) */
+  currentBest?: OptimizerResult;
+}
+
+/**
+ * Callback function for receiving progress updates during optimization.
+ */
+export type OptimizerProgressCallback = (progress: OptimizerProgress) => void;
+
+/**
  * Full optimization result.
  */
 export interface OptimizerResult {

@@ -4,14 +4,18 @@ import {
   CalcRequestsUnion,
   CalcResponse,
   CalcResponsesUnion,
+  OptimizeProgressResponse,
   WORKER_JSON_REPLACER,
   WORKER_JSON_REVIVER,
   WorkerRequestType,
 } from '@/worker/CalcWorkerTypes';
 import { Debouncer, DeferredPromise } from '@/utils';
+import { OptimizerProgress } from '@/types/Optimizer';
 import React, {
   createContext, useContext, useEffect, useState,
 } from 'react';
+
+export type ProgressCallback = (progress: OptimizerProgress) => void;
 
 export class CalcWorker {
   private static SELF_ID: number = 0;
@@ -28,6 +32,9 @@ export class CalcWorker {
 
   private sequenceIds: { [k in WorkerRequestType ]?: number } = {};
 
+  // Callback for optimizer progress updates
+  private optimizeProgressCallback?: ProgressCallback;
+
   constructor() {
     this.id = CalcWorker.SELF_ID;
     CalcWorker.SELF_ID += 1;
@@ -35,6 +42,15 @@ export class CalcWorker {
     for (const t of Object.values(WorkerRequestType)) {
       this.debouncers[t as WorkerRequestType] = new Debouncer(250);
     }
+  }
+
+  /**
+   * Set a callback to receive optimizer progress updates.
+   * The callback will be called multiple times during optimization.
+   * Set to undefined to clear the callback.
+   */
+  public setOptimizeProgressCallback(callback: ProgressCallback | undefined): void {
+    this.optimizeProgressCallback = callback;
   }
 
   public initWorker() {
@@ -87,6 +103,24 @@ export class CalcWorker {
     const data = JSON.parse(e.data, WORKER_JSON_REVIVER) as CalcResponsesUnion;
     const { type, sequenceId, error } = data;
     console.debug(`[CalcWorker ${this.id}] INBOUND ${sequenceId} ${WorkerRequestType[data.type]} | ${e.data}`);
+
+    // Handle optimizer progress updates specially
+    // Progress messages come before the final OPTIMIZE response
+    if (type === WorkerRequestType.OPTIMIZE_PROGRESS) {
+      // Progress messages use the same sequenceId as the OPTIMIZE request
+      const expectedSeqId = this.sequenceIds[WorkerRequestType.OPTIMIZE];
+      if (sequenceId !== expectedSeqId) {
+        console.debug(`[CalcWorker ${this.id}] Ignoring stale progress ${sequenceId}`);
+        return;
+      }
+
+      // Call the progress callback if registered
+      if (this.optimizeProgressCallback) {
+        const progressData = data as OptimizeProgressResponse;
+        this.optimizeProgressCallback(progressData.payload);
+      }
+      return; // Don't resolve any promise for progress updates
+    }
 
     const expectedSeqId = this.sequenceIds[type];
     if (sequenceId !== expectedSeqId) {

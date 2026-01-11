@@ -6,7 +6,7 @@ import {
   CompareResult, CompareXAxis, CompareYAxis,
 } from '@/lib/Comparator';
 import {
-  CombatStyle, OptimizationObjective, OptimizerConstraints, OptimizerResult,
+  CombatStyle, OptimizationObjective, OptimizerConstraints, OptimizerProgress, OptimizerResult,
 } from '@/types/Optimizer';
 
 /**
@@ -20,6 +20,7 @@ export enum WorkerRequestType {
   COMPUTE_TTK,
   COMPARE,
   OPTIMIZE,
+  OPTIMIZE_PROGRESS,
 }
 
 export interface WorkerRequest<T extends WorkerRequestType> {
@@ -130,13 +131,22 @@ export interface OptimizeResponse extends WorkerResponse<WorkerRequestType.OPTIM
   payload: OptimizerResult,
 }
 
+/**
+ * Progress update sent during optimization.
+ * This is sent as an intermediate message before the final OptimizeResponse.
+ */
+export interface OptimizeProgressResponse extends WorkerResponse<WorkerRequestType.OPTIMIZE_PROGRESS> {
+  payload: OptimizerProgress,
+}
+
 export type CalcResponsesUnion =
   ComputeBasicResponse |
   ComputeReverseResponse |
   CompareResponse |
   TtkResponse |
   TtkResponseParallel |
-  OptimizeResponse;
+  OptimizeResponse |
+  OptimizeProgressResponse;
 export type CalcResponse<T extends WorkerRequestType> = CalcResponsesUnion & { type: T };
 
 export type Handler<T extends WorkerRequestType> = (data: Extract<CalcRequestsUnion, { type: T }>['data'], rawRequest: CalcRequestsUnion) => Promise<CalcResponse<T>['payload']>;
