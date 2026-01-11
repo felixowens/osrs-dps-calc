@@ -51,7 +51,7 @@
         "Requirements can be checked against player skills",
         "Items can be filtered by whether player meets requirements"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

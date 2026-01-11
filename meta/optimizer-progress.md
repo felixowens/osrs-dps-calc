@@ -1283,3 +1283,56 @@ The slayer task setting is already fully functional through the existing DPS cal
   - worker-002/ui-009: Progress reporting
 
 **Next feature to work on:** data-004 - Equipment skill requirements are accessible
+
+---
+
+## 2026-01-11 (data-004)
+
+**Feature completed:** data-004 - Equipment skill requirements are accessible
+
+**What was implemented:**
+- Created `scripts/fetchEquipmentRequirements.py`:
+  - Fetches skill requirements from osrsreboxed-db (0xNeffarion fork)
+  - Reads equipment IDs from equipment.json
+  - Fetches requirements in parallel batches (50 items per batch, 10 workers)
+  - Idempotent: skips items already in output file
+  - Saves to `cdn/json/equipment-requirements.json`
+  - Found 1914 items with skill requirements
+
+- Added `SkillRequirements` interface to `src/types/Optimizer.ts`:
+  - Supports all OSRS skills (attack, strength, defence, ranged, magic, prayer, etc.)
+  - Maps skill names to required levels
+
+- Added requirements store and functions to `src/lib/Optimizer.ts`:
+  - `requirementsStore`: Map of item ID to SkillRequirements, loaded on module init
+  - `getRequirementsStoreSize()`: Returns count of items with requirements
+  - `areRequirementsLoaded()`: Checks if data is loaded
+  - `getItemRequirements(itemId)`: Gets requirements for an item
+  - `playerMeetsRequirements(playerSkills, itemId)`: Checks if player can equip item
+  - `playerMeetsItemRequirements(playerSkills, item)`: Same but takes EquipmentPiece
+  - `filterBySkillRequirements(playerSkills, equipment)`: Filters to equippable items
+
+- Added comprehensive tests (15 new tests) in `src/tests/lib/Optimizer.test.ts`:
+  - Tests for areRequirementsLoaded and getRequirementsStoreSize
+  - Tests for getItemRequirements (whip = 70 atk, d scim = 60 atk, etc.)
+  - Tests for playerMeetsRequirements with various skill levels
+  - Tests for filterBySkillRequirements chaining with other filters
+
+**Files changed:**
+- `scripts/fetchEquipmentRequirements.py` (new)
+- `cdn/json/equipment-requirements.json` (new - 1914 items)
+- `src/types/Optimizer.ts` (added SkillRequirements interface)
+- `src/lib/Optimizer.ts` (added requirements store and functions)
+- `src/tests/lib/Optimizer.test.ts` (added 15 tests)
+
+**Commit:** dd2acde6
+
+**Notes for next agent:**
+- Requirements data is loaded automatically on module import
+- The skill name mapping (attack→atk, defence→def, etc.) is in SKILL_NAME_MAP
+- Some skills (slayer, agility, etc.) are in the data but not in PlayerSkills
+- These are ignored since they're not relevant for combat equipment
+- filter-005 (filter by requirements) is now trivial - the function already exists
+- ui-008 (skill requirements toggle) can now use filterBySkillRequirements
+
+**Next feature to work on:** filter-005 - Equipment can be filtered by skill requirements
