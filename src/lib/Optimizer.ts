@@ -1694,6 +1694,336 @@ function createPlayerFromEquipment(
   return newPlayer;
 }
 
+// ============================================================================
+// Set Bonus Evaluation (opt-007)
+// ============================================================================
+
+/**
+ * Result of evaluating a set bonus loadout.
+ */
+export interface SetBonusEvaluationResult {
+  /** The set type evaluated */
+  setType: SetBonusType;
+  /** The complete equipment loadout (set pieces + optimized remaining slots) */
+  equipment: PlayerEquipment;
+  /** Performance metrics for this loadout */
+  metrics: {
+    dps: number;
+    accuracy: number;
+    maxHit: number;
+  };
+  /** Score based on the optimization objective */
+  score: number;
+  /** Whether this set is valid for the current context (e.g., Obsidian needs Tzhaar weapon) */
+  isValid: boolean;
+  /** Reason why set may not be valid */
+  invalidReason?: string;
+}
+
+/**
+ * Create an empty equipment object with all slots set to null.
+ */
+function createEmptyEquipment(): PlayerEquipment {
+  return {
+    head: null,
+    cape: null,
+    neck: null,
+    ammo: null,
+    weapon: null,
+    body: null,
+    shield: null,
+    legs: null,
+    hands: null,
+    feet: null,
+    ring: null,
+  };
+}
+
+/**
+ * Create a player with partial equipment (handles null slots).
+ */
+function createPlayerFromEquipmentPartial(
+  basePlayer: Player,
+  equipment: PlayerEquipment,
+  monster: Monster,
+): Player {
+  const newPlayer: Player = {
+    ...basePlayer,
+    equipment,
+  };
+
+  const bonuses = calculateEquipmentBonusesFromGear(newPlayer, monster);
+  newPlayer.bonuses = bonuses.bonuses;
+  newPlayer.offensive = bonuses.offensive;
+  newPlayer.defensive = bonuses.defensive;
+  newPlayer.attackSpeed = bonuses.attackSpeed;
+
+  return newPlayer;
+}
+
+/**
+ * Build and evaluate a complete loadout using a specific set bonus.
+ *
+ * This function:
+ * 1. Starts with the set pieces from buildSetLoadout()
+ * 2. For special sets (Obsidian, Inquisitor), handles weapon requirements
+ * 3. Fills remaining slots with the best items (greedy optimization)
+ * 4. Calculates DPS/metrics for the complete loadout
+ *
+ * @param setType - The set bonus type to evaluate
+ * @param player - The base player loadout
+ * @param monster - The target monster
+ * @param candidatesBySlot - Pre-filtered candidates grouped by slot
+ * @param constraints - Optimizer constraints
+ * @param objective - Optimization objective
+ * @returns SetBonusEvaluationResult with the complete loadout and metrics
+ */
+export function evaluateSetBonusLoadout(
+  setType: SetBonusType,
+  player: Player,
+  monster: Monster,
+  candidatesBySlot: Record<EquipmentSlot, EquipmentPiece[]>,
+  constraints?: OptimizerConstraints,
+  objective: OptimizationObjective = 'dps',
+): SetBonusEvaluationResult {
+  const definition = getSetBonusDefinition(setType);
+  if (!definition) {
+    return {
+      setType,
+      equipment: createEmptyEquipment(),
+      metrics: { dps: 0, accuracy: 0, maxHit: 0 },
+      score: 0,
+      isValid: false,
+      invalidReason: 'Unknown set type',
+    };
+  }
+
+  // Build the set pieces
+  const allCandidates = Object.values(candidatesBySlot).flat();
+  const setLoadout = buildSetLoadout(setType, allCandidates, constraints);
+
+  if (!setLoadout) {
+    return {
+      setType,
+      equipment: createEmptyEquipment(),
+      metrics: { dps: 0, accuracy: 0, maxHit: 0 },
+      score: 0,
+      isValid: false,
+      invalidReason: 'Set pieces not available',
+    };
+  }
+
+  // Start with the set pieces
+  const equipment: PlayerEquipment = {
+    head: setLoadout.head ?? null,
+    cape: null,
+    neck: null,
+    ammo: null,
+    weapon: setLoadout.weapon ?? null,
+    body: setLoadout.body ?? null,
+    shield: setLoadout.shield ?? null,
+    legs: setLoadout.legs ?? null,
+    hands: setLoadout.hands ?? null,
+    feet: null,
+    ring: null,
+  };
+
+  // Track which slots are locked by the set
+  const lockedSlots = new Set<EquipmentSlot>(
+    Object.keys(definition.pieces) as EquipmentSlot[],
+  );
+
+  // Special handling for Obsidian set - needs Tzhaar weapon
+  if (setType === 'obsidian') {
+    const tzhaarWeapon = findTzhaarWeapon(candidatesBySlot.weapon);
+    if (!tzhaarWeapon) {
+      return {
+        setType,
+        equipment: createEmptyEquipment(),
+        metrics: { dps: 0, accuracy: 0, maxHit: 0 },
+        score: 0,
+        isValid: false,
+        invalidReason: 'No Tzhaar weapon available for Obsidian set',
+      };
+    }
+    equipment.weapon = tzhaarWeapon;
+    lockedSlots.add('weapon');
+    // Tzhaar weapons are 1H, so we can use a shield
+    // Shield will be optimized in the remaining slots step
+  }
+
+  // Special handling for Inquisitor set - can optionally use Inquisitor's mace
+  if (setType === 'inquisitor') {
+    // Check if player is using crush style (required for Inquisitor bonus)
+    if (!isInquisitorEffectiveForPlayer(player)) {
+      return {
+        setType,
+        equipment: createEmptyEquipment(),
+        metrics: { dps: 0, accuracy: 0, maxHit: 0 },
+        score: 0,
+        isValid: false,
+        invalidReason: 'Inquisitor set requires crush attack style',
+      };
+    }
+
+    // Try to find Inquisitor's mace for enhanced bonus
+    const inqMace = findInquisitorMace(candidatesBySlot.weapon);
+    if (inqMace) {
+      equipment.weapon = inqMace;
+      lockedSlots.add('weapon');
+    }
+    // If no mace, weapon will be optimized in remaining slots
+  }
+
+  // Build player with current equipment for evaluation
+  let currentPlayer = createPlayerFromEquipmentPartial(player, equipment, monster);
+
+  // Optimize remaining slots (not locked by set)
+  const remainingSlots: EquipmentSlot[] = [
+    'weapon', 'shield', 'cape', 'neck', 'ammo', 'feet', 'ring',
+  ].filter((slot) => !lockedSlots.has(slot as EquipmentSlot)) as EquipmentSlot[];
+
+  // First handle weapon if not locked (for void sets)
+  if (remainingSlots.includes('weapon')) {
+    const weaponCandidates = filterValidWeapons(candidatesBySlot.weapon);
+    const shieldCandidates = candidatesBySlot.shield;
+
+    // For void sets, hands slot is locked, so shield is not available
+    const effectiveShieldCandidates = lockedSlots.has('hands') ? [] : shieldCandidates;
+
+    const weaponShieldResult = findBestWeaponShieldCombination(
+      currentPlayer,
+      monster,
+      weaponCandidates,
+      effectiveShieldCandidates,
+      constraints,
+      objective,
+    );
+
+    equipment.weapon = weaponShieldResult.weapon;
+    if (!lockedSlots.has('shield')) {
+      equipment.shield = weaponShieldResult.shield;
+    }
+
+    // Update player
+    if (weaponShieldResult.weapon) {
+      currentPlayer = createPlayerWithEquipment(currentPlayer, 'weapon', weaponShieldResult.weapon, monster);
+    }
+    if (weaponShieldResult.shield && !lockedSlots.has('shield')) {
+      currentPlayer = createPlayerWithEquipment(currentPlayer, 'shield', weaponShieldResult.shield, monster);
+    }
+  }
+
+  // Handle ammo after weapon
+  if (remainingSlots.includes('ammo') || !lockedSlots.has('ammo')) {
+    const weaponId = equipment.weapon?.id;
+    if (weaponId && weaponRequiresAmmo(weaponId)) {
+      const ammoResult = findBestAmmoForWeapon(
+        currentPlayer,
+        monster,
+        candidatesBySlot.ammo,
+        constraints,
+        objective,
+      );
+      equipment.ammo = ammoResult.bestItem;
+      if (ammoResult.bestItem) {
+        currentPlayer = createPlayerWithEquipment(currentPlayer, 'ammo', ammoResult.bestItem, monster);
+      }
+    }
+  }
+
+  // Optimize other remaining slots
+  const otherSlots: EquipmentSlot[] = ['cape', 'neck', 'feet', 'ring']
+    .filter((slot) => !lockedSlots.has(slot as EquipmentSlot)) as EquipmentSlot[];
+
+  // Also include shield if not locked and weapon is not 2H
+  if (!lockedSlots.has('shield') && !isTwoHandedWeapon(equipment.weapon)) {
+    if (!otherSlots.includes('shield')) {
+      otherSlots.push('shield');
+    }
+  }
+
+  for (const slot of otherSlots) {
+    const candidates = candidatesBySlot[slot];
+    const result = findBestItemForSlot(slot, currentPlayer, monster, candidates, constraints, objective);
+    equipment[slot] = result.bestItem;
+    if (result.bestItem) {
+      currentPlayer = createPlayerWithEquipment(currentPlayer, slot, result.bestItem, monster);
+    }
+  }
+
+  // Calculate final metrics
+  const finalPlayer = createPlayerFromEquipmentPartial(player, equipment, monster);
+  const metrics = calculateMetrics(finalPlayer, monster);
+  const score = getScoreForObjective(metrics, objective);
+
+  return {
+    setType,
+    equipment,
+    metrics,
+    score,
+    isValid: true,
+  };
+}
+
+/**
+ * Evaluate all available set bonuses and find the best one.
+ *
+ * This function:
+ * 1. Detects all available sets for the combat style
+ * 2. Evaluates each available set (builds complete loadout)
+ * 3. Returns the best set loadout if it beats the provided greedy score
+ *
+ * @param player - The base player loadout
+ * @param monster - The target monster
+ * @param combatStyle - The combat style being optimized
+ * @param candidatesBySlot - Pre-filtered candidates grouped by slot
+ * @param greedyScore - The score from greedy optimization to beat
+ * @param constraints - Optimizer constraints
+ * @param objective - Optimization objective
+ * @returns The best set evaluation result if it beats greedy, null otherwise
+ */
+export function findBestSetBonusLoadout(
+  player: Player,
+  monster: Monster,
+  combatStyle: CombatStyle | undefined,
+  candidatesBySlot: Record<EquipmentSlot, EquipmentPiece[]>,
+  greedyScore: number,
+  constraints?: OptimizerConstraints,
+  objective: OptimizationObjective = 'dps',
+): SetBonusEvaluationResult | null {
+  // Get all candidates as flat array for set detection
+  const allCandidates = Object.values(candidatesBySlot).flat();
+
+  // Get sets relevant to the combat style
+  const availableSets = getAvailableSetBonuses(allCandidates, combatStyle, constraints);
+
+  if (availableSets.length === 0) {
+    return null;
+  }
+
+  let bestResult: SetBonusEvaluationResult | null = null;
+  let bestScore = greedyScore;
+
+  for (const setType of availableSets) {
+    const result = evaluateSetBonusLoadout(
+      setType,
+      player,
+      monster,
+      candidatesBySlot,
+      constraints,
+      objective,
+    );
+
+    if (result.isValid && result.score > bestScore) {
+      bestScore = result.score;
+      bestResult = result;
+    }
+  }
+
+  return bestResult;
+}
+
 /**
  * Information about a potential downgrade for budget fitting.
  */
@@ -2044,14 +2374,38 @@ export function optimizeLoadout(
     }
   }
 
-  // Step 4: Apply budget constraint if specified
-  let finalEquipment = optimizedEquipment;
-  let costInfo = calculateLoadoutCost(optimizedEquipment, constraints?.ownedItems);
+  // Step 4 (opt-007): Compare set bonuses vs greedy result
+  // Calculate the greedy score to compare against
+  const greedyPlayer = createPlayerFromEquipment(player, optimizedEquipment, monster);
+  const greedyMetrics = calculateMetrics(greedyPlayer, monster);
+  const greedyScore = getScoreForObjective(greedyMetrics, objective);
+
+  // Check if any set bonus loadout beats the greedy result
+  const bestSetResult = findBestSetBonusLoadout(
+    player,
+    monster,
+    combatStyle,
+    candidatesBySlot,
+    greedyScore,
+    constraints,
+    objective,
+  );
+
+  // Use the better of greedy vs set bonus loadout
+  let bestEquipment = optimizedEquipment;
+  if (bestSetResult) {
+    // A set bonus loadout beat the greedy result
+    bestEquipment = bestSetResult.equipment;
+  }
+
+  // Step 5: Apply budget constraint if specified
+  let finalEquipment = bestEquipment;
+  let costInfo = calculateLoadoutCost(bestEquipment, constraints?.ownedItems);
 
   if (constraints?.maxBudget !== undefined && costInfo.total > constraints.maxBudget) {
     // Need to fit within budget - iteratively downgrade lower-impact slots
     const budgetResult = applyBudgetConstraint(
-      optimizedEquipment,
+      bestEquipment,
       player,
       monster,
       constraints.maxBudget,

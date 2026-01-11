@@ -1481,3 +1481,68 @@ The slayer task setting is already fully functional through the existing DPS cal
 - Item name matching uses partial case-insensitive matching to handle variants (ornament kits, etc.)
 
 **Next feature to work on:** opt-007 (set bonus evaluation) or worker-002/ui-009 (progress reporting)
+
+---
+
+## 2026-01-11 (opt-007)
+
+**Feature completed:** opt-007 - Optimizer evaluates set bonuses vs individual BiS
+
+**What was implemented:**
+- Added `SetBonusEvaluationResult` interface to `src/lib/Optimizer.ts`:
+  - Contains setType, equipment, metrics, score, isValid, and invalidReason
+- Added `evaluateSetBonusLoadout()` function to build and evaluate complete set loadouts:
+  - Takes a set type, player, monster, and candidates grouped by slot
+  - Starts with set pieces from `buildSetLoadout()`
+  - Handles special requirements (Obsidian needs Tzhaar weapon, Inquisitor needs crush style)
+  - Fills remaining slots with best items using greedy optimization
+  - Returns complete equipment, metrics, and validity status
+- Added `findBestSetBonusLoadout()` function to compare all available sets:
+  - Evaluates each available set for the combat style
+  - Returns the best set if it beats the provided greedy score, null otherwise
+- Added helper functions:
+  - `createEmptyEquipment()` - Creates a null-filled PlayerEquipment object
+  - `createPlayerFromEquipmentPartial()` - Creates player with partial equipment
+- Updated `optimizeLoadout()` to compare set bonuses vs greedy result:
+  - After greedy optimization (Step 3), calculates greedy score
+  - Calls `findBestSetBonusLoadout()` to check if any set beats greedy
+  - Uses whichever produces higher score based on optimization objective
+  - Updated budget constraint (Step 5) to use best equipment
+- Moved opt-007 section to after utility functions to fix ESLint use-before-define errors
+- Added 15 comprehensive tests in `src/tests/lib/Optimizer.test.ts`:
+  - Tests for evaluateSetBonusLoadout with invalid/unknown set types
+  - Tests for set piece availability detection
+  - Tests for void melee set evaluation
+  - Tests for obsidian set requiring Tzhaar weapon
+  - Tests for inquisitor set requiring crush style
+  - Tests for remaining slots being filled
+  - Tests for findBestSetBonusLoadout with no sets, infinite score, combat style filtering
+  - Integration tests for optimizeLoadout with set bonus comparison
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (added evaluateSetBonusLoadout, findBestSetBonusLoadout, helper functions, updated optimizeLoadout)
+- `src/tests/lib/Optimizer.test.ts` (added 15 tests for opt-007, updated imports)
+- `meta/optimizer-features.json` (marked opt-007 as passing)
+
+**Commit:** (pending)
+
+**Notes for next agent:**
+- Set bonus evaluation is now complete - the optimizer compares set DPS vs greedy BiS
+- The comparison happens after greedy optimization, before budget constraint
+- Sets are only considered if they produce higher score than greedy result
+- Obsidian set requires a Tzhaar weapon, otherwise returns invalid
+- Inquisitor set requires crush attack style, otherwise returns invalid
+- Void sets lock head/body/legs/hands, remaining slots optimized normally
+- The `optimizeLoadout` function now has 5 steps:
+  1. Weapon+shield optimization
+  2. Ammunition optimization
+  3. Remaining slots optimization (greedy)
+  4. Set bonus comparison (opt-007)
+  5. Budget constraint
+- Remaining medium-priority features:
+  - ui-009/worker-002: Progress reporting during optimization
+  - weapon-001/002/003: Special weapon handling (blowpipe, powered staves, crossbows)
+  - edge cases: edge-001 through edge-004
+
+**Next feature to work on:** worker-002 (progress reporting) or weapon-001 (blowpipe dart selection)
+

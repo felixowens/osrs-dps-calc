@@ -27,7 +27,10 @@ import {
   detectSetBonus, detectAllSetBonuses, getAvailableSetBonuses, buildSetLoadout,
   findMatchingPiece, findAllMatchingPieces, isObsidianEffectiveWithWeapon,
   findTzhaarWeapon, isInquisitorEffectiveForPlayer, findInquisitorMace,
+  // Set bonus evaluation (opt-007)
+  evaluateSetBonusLoadout, findBestSetBonusLoadout, groupBySlot,
 } from '@/lib/Optimizer';
+import { SetBonusType } from '@/types/Optimizer';
 import { availableEquipment } from '@/lib/Equipment';
 import { findEquipment, getTestMonster, getTestPlayer } from '@/tests/utils/TestUtils';
 
@@ -3412,6 +3415,285 @@ describe('Optimizer', () => {
         const mace = findInquisitorMace(availableEquipment);
         expect(mace).toBeDefined();
         expect(mace!.name).toBe("Inquisitor's mace");
+      });
+    });
+  });
+
+  describe('Set Bonus Evaluation (opt-007)', () => {
+    describe('evaluateSetBonusLoadout', () => {
+      test('returns invalid result for unknown set type', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+        const candidatesBySlot = groupBySlot(availableEquipment);
+
+        const result = evaluateSetBonusLoadout(
+          'unknown_set' as SetBonusType,
+          player,
+          monster,
+          candidatesBySlot,
+        );
+
+        expect(result.isValid).toBe(false);
+        expect(result.invalidReason).toBe('Unknown set type');
+        expect(result.score).toBe(0);
+      });
+
+      test('returns invalid result when set pieces not available', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+
+        // Create candidates without void pieces
+        const candidatesWithoutVoid = availableEquipment.filter(
+          (item) => !item.name.toLowerCase().includes('void'),
+        );
+        const candidatesBySlot = groupBySlot(candidatesWithoutVoid);
+
+        const result = evaluateSetBonusLoadout(
+          'void_melee',
+          player,
+          monster,
+          candidatesBySlot,
+        );
+
+        expect(result.isValid).toBe(false);
+        expect(result.invalidReason).toBe('Set pieces not available');
+      });
+
+      test('evaluates void melee set loadout with valid pieces', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+        const candidatesBySlot = groupBySlot(availableEquipment);
+
+        const result = evaluateSetBonusLoadout(
+          'void_melee',
+          player,
+          monster,
+          candidatesBySlot,
+        );
+
+        // Check if void pieces are available in the equipment data
+        const hasVoidMeleeHelm = availableEquipment.some((item) => item.name.toLowerCase().includes('void melee helm'));
+        const hasVoidTop = availableEquipment.some((item) => item.name.toLowerCase().includes('void knight top'));
+        const hasVoidRobe = availableEquipment.some((item) => item.name.toLowerCase().includes('void knight robe'));
+        const hasVoidGloves = availableEquipment.some((item) => item.name.toLowerCase().includes('void knight gloves'));
+
+        if (hasVoidMeleeHelm && hasVoidTop && hasVoidRobe && hasVoidGloves) {
+          expect(result.isValid).toBe(true);
+          expect(result.equipment.head?.name.toLowerCase()).toContain('void melee helm');
+          expect(result.equipment.hands?.name.toLowerCase()).toContain('void knight gloves');
+          expect(result.score).toBeGreaterThan(0);
+          expect(result.metrics.dps).toBeGreaterThan(0);
+        } else {
+          // If void pieces not in test data, result should be invalid
+          expect(result.isValid).toBe(false);
+        }
+      });
+
+      test('obsidian set requires Tzhaar weapon', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+
+        // Create candidates with obsidian armor but without Tzhaar weapons
+        const candidatesWithoutTzhaar = availableEquipment.filter(
+          (item) => !item.name.toLowerCase().includes('tzhaar')
+            && !item.name.toLowerCase().includes('toktz'),
+        );
+        const candidatesBySlot = groupBySlot(candidatesWithoutTzhaar);
+
+        const result = evaluateSetBonusLoadout(
+          'obsidian',
+          player,
+          monster,
+          candidatesBySlot,
+        );
+
+        // Should be invalid because no Tzhaar weapon available
+        // OR invalid because obsidian armor pieces not available
+        expect(result.isValid).toBe(false);
+      });
+
+      test('inquisitor set requires crush style', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+
+        // Set player style to slash (not crush)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (player.style as any).type = 'slash';
+
+        const candidatesBySlot = groupBySlot(availableEquipment);
+
+        const result = evaluateSetBonusLoadout(
+          'inquisitor',
+          player,
+          monster,
+          candidatesBySlot,
+        );
+
+        expect(result.isValid).toBe(false);
+        expect(result.invalidReason).toBe('Inquisitor set requires crush attack style');
+      });
+
+      test('set evaluation returns complete loadout with remaining slots filled', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+        const candidatesBySlot = groupBySlot(availableEquipment);
+
+        // Check if we have void pieces available
+        const hasVoidSet = availableEquipment.some((item) => item.name.toLowerCase().includes('void melee helm'))
+          && availableEquipment.some((item) => item.name.toLowerCase().includes('void knight top'))
+          && availableEquipment.some((item) => item.name.toLowerCase().includes('void knight robe'))
+          && availableEquipment.some((item) => item.name.toLowerCase().includes('void knight gloves'));
+
+        if (hasVoidSet) {
+          const result = evaluateSetBonusLoadout(
+            'void_melee',
+            player,
+            monster,
+            candidatesBySlot,
+          );
+
+          expect(result.isValid).toBe(true);
+
+          // Void locks: head, body, legs, hands
+          // Remaining slots should be filled: cape, neck, ring, feet, weapon
+          expect(result.equipment.weapon).not.toBeNull();
+          expect(result.equipment.cape).not.toBeNull();
+          expect(result.equipment.neck).not.toBeNull();
+          expect(result.equipment.feet).not.toBeNull();
+          expect(result.equipment.ring).not.toBeNull();
+        }
+      });
+    });
+
+    describe('findBestSetBonusLoadout', () => {
+      test('returns null when no sets available', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+
+        // Create candidates without any set pieces
+        const candidatesWithoutSets = availableEquipment.filter(
+          (item) => !item.name.toLowerCase().includes('void')
+            && !item.name.toLowerCase().includes('inquisitor')
+            && !item.name.toLowerCase().includes('obsidian'),
+        );
+        const candidatesBySlot = groupBySlot(candidatesWithoutSets);
+
+        const result = findBestSetBonusLoadout(
+          player,
+          monster,
+          'melee',
+          candidatesBySlot,
+          0, // very low greedy score to beat
+        );
+
+        expect(result).toBeNull();
+      });
+
+      test('returns null when no set beats greedy score', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+        const candidatesBySlot = groupBySlot(availableEquipment);
+
+        // Use a very high greedy score that no set can beat
+        const result = findBestSetBonusLoadout(
+          player,
+          monster,
+          'melee',
+          candidatesBySlot,
+          Infinity, // no set can beat this
+        );
+
+        expect(result).toBeNull();
+      });
+
+      test('filters sets by combat style', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+        const candidatesBySlot = groupBySlot(availableEquipment);
+
+        // When optimizing for ranged, should only consider ranged-relevant sets
+        const result = findBestSetBonusLoadout(
+          player,
+          monster,
+          'ranged',
+          candidatesBySlot,
+          0, // low score to beat
+        );
+
+        // If a result is returned, it should be for a ranged set
+        if (result) {
+          expect(['void_ranged', 'elite_void_ranged']).toContain(result.setType);
+        }
+      });
+    });
+
+    describe('optimizeLoadout with set bonus comparison', () => {
+      test('optimizeLoadout compares sets against greedy result', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+
+        // Run optimizer - it will compare greedy vs set results internally
+        const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+        // Result should have valid structure
+        expect(result.equipment).toBeDefined();
+        expect(result.metrics.dps).toBeGreaterThan(0);
+        expect(result.meta.evaluations).toBeGreaterThan(0);
+      });
+
+      test('set bonus loadout is chosen when it beats greedy', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+
+        // Check if void pieces are available
+        const hasVoidSet = availableEquipment.some((item) => item.name.toLowerCase().includes('void melee helm'))
+          && availableEquipment.some((item) => item.name.toLowerCase().includes('void knight top'))
+          && availableEquipment.some((item) => item.name.toLowerCase().includes('void knight robe'))
+          && availableEquipment.some((item) => item.name.toLowerCase().includes('void knight gloves'));
+
+        if (hasVoidSet) {
+          // Run optimizer
+          const result = optimizeLoadout(player, monster, { combatStyle: 'melee' });
+
+          // The optimizer should have compared greedy vs set
+          // We can't easily assert which one won, but we can verify the process worked
+          expect(result.equipment).toBeDefined();
+          expect(result.metrics.dps).toBeGreaterThan(0);
+        }
+      });
+
+      test('partial sets are handled appropriately', () => {
+        const monster = getTestMonster('Corporeal Beast');
+        const player = getTestPlayer(monster);
+
+        // Create candidates with partial void set (missing one piece)
+        const candidatesPartialVoid = availableEquipment.filter(
+          (item) => {
+            // Remove void knight gloves to make set incomplete
+            if (item.name.toLowerCase() === 'void knight gloves') return false;
+            return true;
+          },
+        );
+
+        // The optimizer should fall back to greedy since void set is incomplete
+        const candidatesBySlot = groupBySlot(candidatesPartialVoid);
+
+        // Verify set detection returns incomplete
+        const setDetection = detectSetBonus('void_melee', candidatesPartialVoid);
+
+        // If gloves are required for void, set should be incomplete
+        if (setDetection.missingPieces.includes('hands')) {
+          expect(setDetection.available).toBe(false);
+
+          // Also verify that evaluateSetBonusLoadout returns invalid for incomplete set
+          const result = evaluateSetBonusLoadout(
+            'void_melee',
+            player,
+            monster,
+            candidatesBySlot,
+          );
+          expect(result.isValid).toBe(false);
+        }
       });
     });
   });

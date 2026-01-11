@@ -194,7 +194,7 @@
         "Chooses whichever produces higher DPS",
         "Handles partial sets appropriately"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {
