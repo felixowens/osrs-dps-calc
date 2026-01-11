@@ -243,7 +243,7 @@
         "Built-in spell is used for DPS calculation",
         "No ammo slot consideration for powered staves"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

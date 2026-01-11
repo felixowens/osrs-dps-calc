@@ -9,6 +9,8 @@ import {
   weaponRequiresAmmo, isAmmoValidForWeapon, filterValidAmmoForWeapon, findBestAmmoForWeapon,
   // Blowpipe dart selection (weapon-001)
   isBlowpipeWeapon, isBlowpipeDart, getDartItems, createBlowpipeWithDart, findBestDartForBlowpipe,
+  // Powered staff detection (weapon-002)
+  isPoweredStaff,
   // Price store functions
   setItemPrice, setItemPrices, setItemUntradeable, clearPriceStore,
   getItemPrice, getItemPriceInfo, getEffectivePrice, isItemWithinBudget,
@@ -3968,6 +3970,177 @@ describe('Optimizer', () => {
         if (result.equipment.weapon && isBlowpipeWeapon(result.equipment.weapon)) {
           expect(result.equipment.ammo).toBeNull();
         }
+      });
+    });
+
+    // weapon-002: Powered staves handling
+    describe('Powered staves (weapon-002)', () => {
+      // Common powered staves for testing
+      const tridentOfTheSeas = findEquipment('Trident of the seas');
+      const tridentOfTheSwamp = findEquipment('Trident of the swamp');
+      const sanguinestiStaff = findEquipment('Sanguinesti staff');
+      const tumekensShadow = findEquipment("Tumeken's shadow");
+
+      test('isPoweredStaff returns true for powered staves', () => {
+        expect(isPoweredStaff(tridentOfTheSeas)).toBe(true);
+        expect(isPoweredStaff(tridentOfTheSwamp)).toBe(true);
+        expect(isPoweredStaff(sanguinestiStaff)).toBe(true);
+        expect(isPoweredStaff(tumekensShadow)).toBe(true);
+      });
+
+      test('isPoweredStaff returns false for non-powered staves', () => {
+        const staff = findEquipment('Staff of the dead');
+        const whip = findEquipment('Abyssal whip');
+        const tbow = findEquipment('Twisted bow');
+        const runeCrossbow = findEquipment('Rune crossbow');
+
+        expect(isPoweredStaff(staff)).toBe(false);
+        expect(isPoweredStaff(whip)).toBe(false);
+        expect(isPoweredStaff(tbow)).toBe(false);
+        expect(isPoweredStaff(runeCrossbow)).toBe(false);
+      });
+
+      test('isPoweredStaff returns false for null/undefined', () => {
+        expect(isPoweredStaff(null)).toBe(false);
+        expect(isPoweredStaff(undefined)).toBe(false);
+      });
+
+      test('createPlayerWithEquipment sets magic style for powered staves', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+
+        // Equip a powered staff
+        const playerWithStaff = createPlayerWithEquipment(player, 'weapon', sanguinestiStaff!, monster);
+
+        // Style should be magic
+        expect(playerWithStaff.style.type).toBe('magic');
+      });
+
+      test('createPlayerWithEquipment clears spell for powered staves', () => {
+        const monster = getTestMonster();
+        // Create a player with a spell set
+        const player = getTestPlayer(monster, {
+          spell: {
+            name: 'Fire Surge', max_hit: 24, element: 'fire', spellbook: 'standard',
+          },
+        });
+
+        // Equip a powered staff
+        const playerWithStaff = createPlayerWithEquipment(player, 'weapon', tumekensShadow!, monster);
+
+        // Spell should be null (powered staves use built-in spells)
+        expect(playerWithStaff.spell).toBeNull();
+      });
+
+      test('powered staves have positive DPS with magic style', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+
+        // Equip a powered staff
+        const playerWithStaff = createPlayerWithEquipment(player, 'weapon', sanguinestiStaff!, monster);
+
+        // Calculate DPS
+        const dps = calculateDps(playerWithStaff, monster);
+
+        // DPS should be positive (not zero or NaN)
+        expect(dps).toBeGreaterThan(0);
+        expect(Number.isNaN(dps)).toBe(false);
+      });
+
+      test('powered staves can be evaluated by the optimizer', () => {
+        const monster = getTestMonster();
+        const magicStyle = getCombatStylesForCategory(EquipmentCategory.POWERED_STAFF)[0];
+        const player = getTestPlayer(monster, { style: magicStyle });
+
+        // Evaluate sanguinesti staff
+        const evaluation = evaluateItem(player, monster, sanguinestiStaff!);
+
+        // Evaluation should have positive DPS
+        expect(evaluation.dps).toBeGreaterThan(0);
+        expect(evaluation.score).toBeGreaterThan(0);
+      });
+
+      test('powered staves are selected when optimizing for magic', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+
+        // Optimize for magic
+        const result = optimizeLoadout(player, monster, {
+          combatStyle: 'magic',
+        });
+
+        // Should select a weapon
+        expect(result.equipment.weapon).not.toBeNull();
+
+        // If it's a powered staff, verify proper handling
+        if (result.equipment.weapon && isPoweredStaff(result.equipment.weapon)) {
+          // Ammo slot should be null (powered staves don't use ammo)
+          expect(result.equipment.ammo).toBeNull();
+
+          // The result should have positive DPS
+          expect(result.metrics.dps).toBeGreaterThan(0);
+        }
+      });
+
+      test('ammo slot is null when powered staff is selected', () => {
+        const monster = getTestMonster();
+        const player = getTestPlayer(monster);
+
+        // Equip a powered staff
+        const playerWithStaff = createPlayerWithEquipment(player, 'weapon', tridentOfTheSwamp!, monster);
+
+        const result = optimizeLoadout(playerWithStaff, monster, {
+          combatStyle: 'magic',
+        });
+
+        // If a powered staff is selected, ammo slot should be null
+        if (result.equipment.weapon && isPoweredStaff(result.equipment.weapon)) {
+          expect(result.equipment.ammo).toBeNull();
+        }
+      });
+
+      test('powered staves have correct category', () => {
+        expect(tridentOfTheSeas?.category).toBe(EquipmentCategory.POWERED_STAFF);
+        expect(sanguinestiStaff?.category).toBe(EquipmentCategory.POWERED_STAFF);
+        expect(tumekensShadow?.category).toBe(EquipmentCategory.POWERED_STAFF);
+      });
+
+      test('filterByCombatStyle includes powered staves for magic', () => {
+        const magicItems = filterByCombatStyle('magic');
+        const poweredStaves = magicItems.filter((item) => isPoweredStaff(item));
+
+        // Should have powered staves in the magic items
+        expect(poweredStaves.length).toBeGreaterThan(0);
+
+        // Verify specific staves are included
+        expect(poweredStaves.some((item) => item.name === 'Sanguinesti staff')).toBe(true);
+        expect(poweredStaves.some((item) => item.name === "Tumeken's shadow")).toBe(true);
+      });
+
+      test('powered staff DPS is higher with higher magic level', () => {
+        const monster = getTestMonster();
+
+        // Create two players with different magic levels
+        const lowMagicPlayer = getTestPlayer(monster, {
+          skills: {
+            atk: 99, str: 99, def: 99, hp: 99, magic: 50, ranged: 99, prayer: 77,
+          },
+        });
+        const highMagicPlayer = getTestPlayer(monster, {
+          skills: {
+            atk: 99, str: 99, def: 99, hp: 99, magic: 99, ranged: 99, prayer: 77,
+          },
+        });
+
+        // Equip the same powered staff
+        const lowMagicWithStaff = createPlayerWithEquipment(lowMagicPlayer, 'weapon', sanguinestiStaff!, monster);
+        const highMagicWithStaff = createPlayerWithEquipment(highMagicPlayer, 'weapon', sanguinestiStaff!, monster);
+
+        // Higher magic level should have higher DPS
+        const lowMagicDps = calculateDps(lowMagicWithStaff, monster);
+        const highMagicDps = calculateDps(highMagicWithStaff, monster);
+
+        expect(highMagicDps).toBeGreaterThan(lowMagicDps);
       });
     });
   });

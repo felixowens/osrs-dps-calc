@@ -12,6 +12,8 @@ import {
 } from '@/lib/Equipment';
 import { BLOWPIPE_IDS } from '@/lib/constants';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
+import { EquipmentCategory } from '@/enums/EquipmentCategory';
+import { getCombatStylesForCategory } from '@/utils';
 import equipmentRequirementsData from '../../cdn/json/equipment-requirements.json';
 
 /**
@@ -1179,6 +1181,21 @@ export function filterValidWeapons(weapons: EquipmentPiece[]): EquipmentPiece[] 
 }
 
 /**
+ * Check if an equipment piece is a powered staff or wand.
+ *
+ * Powered staves (trident, sanguinesti, tumeken's shadow, etc.) use built-in spells
+ * and don't require separate spell selection or ammunition.
+ *
+ * @param item - The equipment piece to check
+ * @returns True if the item is a powered staff or wand
+ */
+export function isPoweredStaff(item: EquipmentPiece | null | undefined): boolean {
+  if (!item) return false;
+  return item.category === EquipmentCategory.POWERED_STAFF
+    || item.category === EquipmentCategory.POWERED_WAND;
+}
+
+/**
  * Create a copy of the player with different equipment in a specific slot.
  *
  * This creates a shallow copy of the player object with updated equipment
@@ -1207,6 +1224,24 @@ export function createPlayerWithEquipment(
     ...player,
     equipment: newEquipment,
   };
+
+  // When changing weapons, update the combat style to match the weapon's category
+  // This is critical for powered staves (and other weapons) to use the correct attack style
+  if (slot === 'weapon' && item) {
+    const weaponCategory = item.category || EquipmentCategory.UNARMED;
+    const styles = getCombatStylesForCategory(weaponCategory);
+    if (styles.length > 0) {
+      // Find 'Rapid' stance for ranged, or use first style as default
+      const rapid = styles.find((s) => s.stance === 'Rapid');
+      newPlayer.style = rapid || styles[0];
+    }
+
+    // For powered staves/wands, clear the spell as they use built-in spells
+    if (weaponCategory === EquipmentCategory.POWERED_STAFF
+      || weaponCategory === EquipmentCategory.POWERED_WAND) {
+      newPlayer.spell = null;
+    }
+  }
 
   // Recalculate bonuses based on the new equipment
   const bonuses = calculateEquipmentBonusesFromGear(newPlayer, monster);
@@ -1664,10 +1699,10 @@ export function findBestDartForBlowpipe(
   constraints?: OptimizerConstraints,
   objective: OptimizationObjective = 'dps',
 ): {
-  bestDart: EquipmentPiece | null;
-  score: number;
-  candidates: ItemEvaluation[];
-} {
+    bestDart: EquipmentPiece | null;
+    score: number;
+    candidates: ItemEvaluation[];
+  } {
   const weapon = player.equipment.weapon;
 
   if (!weapon || !isBlowpipeWeapon(weapon)) {
