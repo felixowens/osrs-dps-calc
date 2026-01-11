@@ -1546,3 +1546,58 @@ The slayer task setting is already fully functional through the existing DPS cal
 
 **Next feature to work on:** worker-002 (progress reporting) or weapon-001 (blowpipe dart selection)
 
+---
+
+## 2026-01-11 (weapon-001)
+
+**Feature completed:** weapon-001 - Blowpipe dart selection is handled
+
+**What was implemented:**
+- Added blowpipe dart selection functions to `src/lib/Optimizer.ts`:
+  - `isBlowpipeWeapon(item)`: Check if an equipment piece is a blowpipe (uses BLOWPIPE_IDS constant)
+  - `isBlowpipeDart(item)`: Check if an item is a valid blowpipe dart (slot=weapon, ends with "dart", excludes Atlatl dart)
+  - `getDartItems(equipment?)`: Get all dart items sorted by ranged_str descending
+  - `createBlowpipeWithDart(blowpipe, dart)`: Create a blowpipe with dart set in itemVars
+  - `findBestDartForBlowpipe(player, monster, darts, constraints?, objective?)`: Find the best dart for a blowpipe
+- Modified `optimizeLoadout` Step 2 to handle blowpipe dart selection:
+  - When a blowpipe is selected as weapon, automatically find and set the best dart
+  - Dart selection respects constraints (blacklist, skill requirements)
+  - Dart is stored in `weapon.itemVars.blowpipeDartId` and `weapon.itemVars.blowpipeDartName`
+  - Ammo slot is set to null for blowpipes (darts don't use ammo slot)
+- Added 27 comprehensive tests for blowpipe dart selection:
+  - Tests for isBlowpipeWeapon with various weapons
+  - Tests for isBlowpipeDart with various darts and non-darts
+  - Tests for getDartItems ordering and filtering
+  - Tests for createBlowpipeWithDart setting itemVars
+  - Tests for findBestDartForBlowpipe with constraints
+  - Integration tests for optimizeLoadout with blowpipe dart selection
+
+**Verification:**
+- TypeScript compiles without errors
+- All 284 Optimizer tests pass
+- Blowpipe dart selection works correctly with blacklist constraints
+- DPS calculation correctly includes dart stats (verified with ranged combat style)
+
+**Files changed:**
+- `src/lib/Optimizer.ts` (added blowpipe dart selection functions, modified optimizeLoadout)
+- `src/tests/lib/Optimizer.test.ts` (added 27 tests for weapon-001)
+- `meta/optimizer-features.json` (marked weapon-001 as passing)
+
+**Commit:** 70d9bf61
+
+**Notes for next agent:**
+- Blowpipe darts are weapon-slot items in the equipment data, not ammo-slot items
+- Darts have 4 versions each: Unpoisoned, Poison, Poison+, Poison++
+- Atlatl dart is excluded (used with Eclipse atlatl, not blowpipe)
+- The dart's ranged_str is added to equipment bonuses in `calculateEquipmentBonusesFromGear`
+- Dragon dart has the highest ranged_str (35) among standard darts
+- When testing blowpipe DPS, ensure player has ranged combat style set (e.g., from EquipmentCategory.THROWN)
+- Budget constraint for darts is NOT yet implemented (weapon-001 step 2 says "respects budget constraints")
+  - Current implementation respects blacklist and skill requirements
+  - Budget filtering could be added in a future iteration if needed
+- Remaining weapon features:
+  - weapon-002: Powered staves handling
+  - weapon-003: Crossbow bolt selection
+
+**Next feature to work on:** weapon-002 (powered staves) or weapon-003 (crossbow bolt selection)
+

@@ -231,7 +231,7 @@
         "Dart selection respects budget constraints",
         "DPS calculation includes dart stats"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {
