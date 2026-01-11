@@ -64,7 +64,7 @@ const DEFAULT_OPTIMIZER_SETTINGS: OptimizerSettings = {
   budget: null,
   ownedItems: [],
   blacklistedItems: [],
-  enforceSkillReqs: false,
+  enforceSkillReqs: true,
 };
 
 const generateInitialEquipment = () => {
