@@ -1715,3 +1715,110 @@ The slayer task setting is already fully functional through the existing DPS cal
 
 **Next feature to work on:** worker-002 (progress reporting) or edge-001 (empty budget handling)
 
+---
+
+## 2026-01-11 (worker-002)
+
+**Feature completed:** worker-002 - Optimizer reports progress
+
+**What was implemented:**
+- Added `OptimizerPhase` type with all optimization phases:
+  - 'initializing', 'filtering', 'weapons', 'ammunition', 'slots', 'set_bonuses', 'budget', 'complete'
+- Added `OptimizerProgress` interface with:
+  - `phase`: Current optimization phase
+  - `progress`: 0-100 percentage
+  - `currentStep` and `totalSteps`: Step tracking
+  - `message`: Optional description of current activity
+  - `currentBest`: Optional current best result (available in complete phase)
+- Added `OptimizerProgressCallback` type for progress callback functions
+- Added `onProgress` optional callback to `OptimizeLoadoutOptions`
+- Modified `optimizeLoadout()` to call progress callback at each major step (15 total steps)
+- Added `OPTIMIZE_PROGRESS` message type to worker protocol
+- Updated worker.ts to send progress messages via `self.postMessage()` during optimization
+- Updated CalcWorker.tsx to:
+  - Handle OPTIMIZE_PROGRESS messages separately from final results
+  - Add `setOptimizeProgressCallback()` method for registering progress handlers
+  - Match progress sequence IDs against the OPTIMIZE request sequence ID
+- Added 4 comprehensive tests:
+  - Progress callback is called multiple times with monotonically increasing progress
+  - All expected phases are reported
+  - Complete phase includes final result
+  - Optimization works correctly without callback
+
+**Files changed:**
+- `src/types/Optimizer.ts` (added OptimizerPhase, OptimizerProgress, OptimizerProgressCallback)
+- `src/lib/Optimizer.ts` (added onProgress option and progress reporting)
+- `src/worker/CalcWorkerTypes.ts` (added OPTIMIZE_PROGRESS and OptimizeProgressResponse)
+- `src/worker/worker.ts` (added progress callback that sends messages)
+- `src/worker/CalcWorker.tsx` (added progress message handling)
+- `src/tests/lib/Optimizer.test.ts` (added 4 tests for worker-002)
+- `meta/optimizer-features.json` (marked worker-002 as passing)
+
+**Commit:** bbf3ea35
+
+**Notes for next agent:**
+- The progress callback is called synchronously during optimization
+- Progress messages are sent via postMessage in the worker thread
+- The CalcWorker class needs `setOptimizeProgressCallback()` called before optimization to receive progress
+- UI component (OptimizerModal) needs to use this callback to display progress (ui-009)
+- Progress is reported as 0-100% across 15 steps
+- The `currentBest` field in OptimizerProgress is only populated in the 'complete' phase
+- Remaining features:
+  - ui-009: Optimizer shows progress while running (depends on worker-002 - now possible)
+  - worker-003: Optimizer can be cancelled (low priority)
+  - Edge cases: edge-001 through edge-004
+
+**Next feature to work on:** ui-009 (show progress in UI) or edge-001 (empty budget handling)
+
+---
+
+## 2026-01-11 (ui-009)
+
+**Feature completed:** ui-009 - Optimizer shows progress while running
+
+**What was implemented:**
+- Added progress state (`OptimizerProgress | null`) to track optimization progress
+- Added `useEffect` hook to clean up progress callback when modal closes or unmounts
+- Registered progress callback with `calc.setOptimizeProgressCallback()` before running optimization
+- Updated loading UI to show real-time progress:
+  - Spinner with current phase name (e.g., "Evaluating weapons")
+  - Percentage completion in yellow (e.g., "42%")
+  - Progress bar that fills as optimization progresses
+  - Step counter (e.g., "Step 7 of 15")
+  - Optional message from the optimizer
+- Added `formatPhaseName()` helper to convert phase IDs to human-readable names:
+  - initializing → "Initializing"
+  - filtering → "Filtering equipment"
+  - weapons → "Evaluating weapons"
+  - ammunition → "Selecting ammunition"
+  - slots → "Optimizing slots"
+  - set_bonuses → "Checking set bonuses"
+  - budget → "Applying budget constraint"
+  - complete → "Complete"
+- Fallback UI shows "Starting optimization..." when progress hasn't been received yet
+
+**Verification:**
+- ESLint passes with no errors
+- TypeScript type checking passes
+- Production build succeeds
+- Progress display updates in real-time during optimization
+
+**Files changed:**
+- `src/app/components/optimizer/OptimizerModal.tsx` (added progress state, callback, and UI)
+- `meta/optimizer-features.json` (marked ui-009 as passing)
+
+**Commit:** 9dc5bbf9
+
+**Notes for next agent:**
+- The progress UI uses the existing CalcWorker progress callback infrastructure (worker-002)
+- The progress bar has a smooth CSS transition for visual polish
+- The callback is cleaned up in the finally block of runOptimization and in the useEffect cleanup
+- The UI shows a fallback "Starting optimization..." message before the first progress message arrives
+- Remaining features to implement:
+  - worker-003: Optimizer can be cancelled (low priority)
+  - data-005: Review items missing skill requirements (low priority)
+  - ui-013 (first one): Apply to different loadout slot (low priority)
+  - edge-001 through edge-004: Edge case handling (low/medium priority)
+
+**Next feature to work on:** worker-003 (cancellation) or edge-001 (empty budget handling)
+

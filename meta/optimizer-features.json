@@ -412,7 +412,7 @@
         "Current phase is displayed",
         "User knows optimization is in progress"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

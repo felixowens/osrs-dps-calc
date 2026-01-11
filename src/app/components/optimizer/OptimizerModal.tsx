@@ -1,4 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, {
+  useState, useCallback, useMemo, useEffect,
+} from 'react';
 import { observer } from 'mobx-react-lite';
 import { toast } from 'react-toastify';
 import Modal from '@/app/components/generic/Modal';
@@ -9,7 +11,9 @@ import CombatStyleSelector from '@/app/components/optimizer/CombatStyleSelector'
 import ObjectiveSelector from '@/app/components/optimizer/ObjectiveSelector';
 import OwnedItemsManager from '@/app/components/optimizer/OwnedItemsManager';
 import OptimizerResults, { ComparisonData } from '@/app/components/optimizer/OptimizerResults';
-import { CombatStyle, OptimizationObjective, OptimizerResult } from '@/types/Optimizer';
+import {
+  CombatStyle, OptimizationObjective, OptimizerProgress, OptimizerResult,
+} from '@/types/Optimizer';
 import { calculateLoadoutCost } from '@/lib/Optimizer';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
 import { useStore } from '@/state';
@@ -64,6 +68,19 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
   // Error state
   const [error, setError] = useState<string | null>(null);
 
+  // Progress state
+  const [progress, setProgress] = useState<OptimizerProgress | null>(null);
+
+  // Clean up progress callback when modal closes or component unmounts
+  useEffect(() => {
+    if (!isOpen) {
+      calc.setOptimizeProgressCallback(undefined);
+    }
+    return () => {
+      calc.setOptimizeProgressCallback(undefined);
+    };
+  }, [isOpen, calc]);
+
   // Calculate comparison data from current loadout
   const comparisonData: ComparisonData | undefined = useMemo(() => {
     // Calculate current player's metrics
@@ -94,6 +111,12 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setProgress(null);
+
+    // Register progress callback to receive updates
+    calc.setOptimizeProgressCallback((p) => {
+      setProgress(p);
+    });
 
     try {
       const request: OptimizeRequest = {
@@ -120,6 +143,7 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
       setError(err instanceof Error ? err.message : 'Optimization failed. Please try again.');
     } finally {
       setIsLoading(false);
+      calc.setOptimizeProgressCallback(undefined);
     }
   }, [calc, store.player, store.monster, combatStyle, objective, budget, ownedItems, blacklistedItems, enforceSkillReqs]);
 
@@ -141,6 +165,21 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
       { toastId: 'optimizer-apply' },
     );
   }, [result, store, setIsOpen]);
+
+  // Format phase name for display
+  const formatPhaseName = (phase: string): string => {
+    const phaseNames: Record<string, string> = {
+      initializing: 'Initializing',
+      filtering: 'Filtering equipment',
+      weapons: 'Evaluating weapons',
+      ammunition: 'Selecting ammunition',
+      slots: 'Optimizing slots',
+      set_bonuses: 'Checking set bonuses',
+      budget: 'Applying budget constraint',
+      complete: 'Complete',
+    };
+    return phaseNames[phase] || phase;
+  };
 
   return (
     <Modal
@@ -190,12 +229,54 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading state with progress */}
         {isLoading && (
           <div className="mb-4 p-4 flex flex-col items-center justify-center">
-            <IconLoader2 size={32} className="animate-spin text-yellow-400 mb-2" />
-            <p className="text-gray-300">Finding optimal gear setup...</p>
-            <p className="text-xs text-gray-500 mt-1">This may take a few seconds</p>
+            <IconLoader2 size={32} className="animate-spin text-yellow-400 mb-3" />
+
+            {/* Progress info */}
+            {progress ? (
+              <>
+                {/* Phase and percentage */}
+                <p className="text-gray-200 font-medium">
+                  {formatPhaseName(progress.phase)}
+                  <span className="text-yellow-400 ml-2">
+                    {`${Math.round(progress.progress)}%`}
+                  </span>
+                </p>
+
+                {/* Progress bar */}
+                <div className="w-full max-w-xs mt-2 mb-2">
+                  <div className="h-2 bg-dark-300 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-yellow-500 transition-all duration-200 ease-out"
+                      style={{ width: `${progress.progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Step info */}
+                <p className="text-xs text-gray-400">
+                  Step
+                  {' '}
+                  {progress.currentStep}
+                  {' '}
+                  of
+                  {' '}
+                  {progress.totalSteps}
+                </p>
+
+                {/* Optional message */}
+                {progress.message && (
+                  <p className="text-xs text-gray-500 mt-1">{progress.message}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-gray-300">Finding optimal gear setup...</p>
+                <p className="text-xs text-gray-500 mt-1">Starting optimization...</p>
+              </>
+            )}
           </div>
         )}
 
