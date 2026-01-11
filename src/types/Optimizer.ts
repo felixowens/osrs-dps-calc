@@ -109,6 +109,50 @@ export interface SlotOptimizationResult {
 }
 
 /**
+ * Known set bonus types that the optimizer can detect and evaluate.
+ */
+export type SetBonusType =
+  | 'void_melee'
+  | 'void_ranged'
+  | 'void_magic'
+  | 'elite_void_ranged'
+  | 'elite_void_magic'
+  | 'inquisitor'
+  | 'obsidian';
+
+/**
+ * Definition of a set bonus, including the pieces required and the combat style it benefits.
+ */
+export interface SetBonusDefinition {
+  /** Unique identifier for this set */
+  type: SetBonusType;
+  /** Display name for the set */
+  name: string;
+  /** Combat style this set benefits (null if benefits multiple or special) */
+  combatStyle: CombatStyle | null;
+  /** Item names required to complete the set, mapped by slot */
+  pieces: Partial<Record<EquipmentSlot, string[]>>;
+  /** Description of the bonus */
+  bonus: string;
+}
+
+/**
+ * Result of detecting a set bonus opportunity.
+ */
+export interface SetBonusDetectionResult {
+  /** The set type detected */
+  type: SetBonusType;
+  /** Whether all pieces are available in candidates */
+  available: boolean;
+  /** Whether all pieces can be equipped (pass skill requirements, budget, etc.) */
+  canEquip: boolean;
+  /** The equipment pieces that would form the set */
+  pieces: Partial<PlayerEquipment>;
+  /** Which pieces are missing from candidates */
+  missingPieces: EquipmentSlot[];
+}
+
+/**
  * Full optimization result.
  */
 export interface OptimizerResult {

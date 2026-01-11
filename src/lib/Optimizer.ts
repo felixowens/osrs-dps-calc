@@ -4,7 +4,8 @@ import {
 import { Monster } from '@/types/Monster';
 import {
   CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation, ItemPrice,
-  OptimizationObjective, OptimizerConstraints, OptimizerResult, SkillRequirements, SlotOptimizationResult,
+  OptimizationObjective, OptimizerConstraints, OptimizerResult, SetBonusDefinition,
+  SetBonusDetectionResult, SetBonusType, SkillRequirements, SlotOptimizationResult,
 } from '@/types/Optimizer';
 import {
   AmmoApplicability, ammoApplicability, availableEquipment, calculateEquipmentBonusesFromGear,
@@ -497,6 +498,439 @@ export function filterBySkillRequirements(
   return equipment.filter((item) => playerMeetsRequirements(playerSkills, item.id));
 }
 
+/**
+ * Get all equipment grouped by slot.
+ *
+ * @param equipment - Optional array of equipment to group. Defaults to all available equipment.
+ * @returns A record mapping each slot to its equipment pieces
+ */
+export function groupBySlot(
+  equipment: EquipmentPiece[] = availableEquipment,
+): Record<EquipmentSlot, EquipmentPiece[]> {
+  const result: Record<EquipmentSlot, EquipmentPiece[]> = {
+    head: [],
+    cape: [],
+    neck: [],
+    ammo: [],
+    weapon: [],
+    body: [],
+    shield: [],
+    legs: [],
+    hands: [],
+    feet: [],
+    ring: [],
+  };
+
+  for (const item of equipment) {
+    if (item.slot in result) {
+      result[item.slot].push(item);
+    }
+  }
+
+  return result;
+}
+
+// ============================================================================
+// Set Bonus Definitions (opt-006)
+// ============================================================================
+
+/**
+ * Item name patterns for Void Knight set pieces.
+ * Includes base versions, ornament kits (or), and any recolored variants.
+ */
+const VOID_ROBES: string[] = ['Void knight top', 'Elite void top'];
+const VOID_LEGS: string[] = ['Void knight robe', 'Elite void robe'];
+const VOID_GLOVES: string[] = ['Void knight gloves'];
+const VOID_MELEE_HELM: string[] = ['Void melee helm'];
+const VOID_RANGER_HELM: string[] = ['Void ranger helm'];
+const VOID_MAGE_HELM: string[] = ['Void mage helm'];
+
+/**
+ * Item name patterns for Elite Void set pieces (upgraded from regular).
+ */
+const ELITE_VOID_TOP: string[] = ['Elite void top'];
+const ELITE_VOID_ROBE: string[] = ['Elite void robe'];
+
+/**
+ * Item name patterns for Inquisitor's set pieces.
+ */
+const INQUISITOR_HELM: string[] = ["Inquisitor's great helm"];
+const INQUISITOR_BODY: string[] = ["Inquisitor's hauberk"];
+const INQUISITOR_LEGS: string[] = ["Inquisitor's plateskirt"];
+const INQUISITOR_MACE: string[] = ["Inquisitor's mace"];
+
+/**
+ * Item name patterns for Obsidian set pieces.
+ */
+const OBSIDIAN_HELM: string[] = ['Obsidian helmet'];
+const OBSIDIAN_BODY: string[] = ['Obsidian platebody'];
+const OBSIDIAN_LEGS: string[] = ['Obsidian platelegs'];
+
+/**
+ * Tzhaar weapons that activate Obsidian set bonus.
+ */
+const TZHAAR_WEAPONS: string[] = [
+  'Tzhaar-ket-em',
+  'Tzhaar-ket-om',
+  'Tzhaar-ket-om (t)',
+  'Toktz-xil-ak',
+  'Toktz-xil-ek',
+  'Toktz-mej-tal',
+];
+
+/**
+ * All set bonus definitions.
+ * Each definition includes the pieces required and the combat style it benefits.
+ */
+export const SET_BONUS_DEFINITIONS: SetBonusDefinition[] = [
+  {
+    type: 'void_melee',
+    name: 'Void Knight (Melee)',
+    combatStyle: 'melee',
+    pieces: {
+      head: VOID_MELEE_HELM,
+      body: VOID_ROBES,
+      legs: VOID_LEGS,
+      hands: VOID_GLOVES,
+    },
+    bonus: '+10% accuracy and damage',
+  },
+  {
+    type: 'void_ranged',
+    name: 'Void Knight (Ranged)',
+    combatStyle: 'ranged',
+    pieces: {
+      head: VOID_RANGER_HELM,
+      body: VOID_ROBES,
+      legs: VOID_LEGS,
+      hands: VOID_GLOVES,
+    },
+    bonus: '+10% accuracy and damage',
+  },
+  {
+    type: 'void_magic',
+    name: 'Void Knight (Magic)',
+    combatStyle: 'magic',
+    pieces: {
+      head: VOID_MAGE_HELM,
+      body: VOID_ROBES,
+      legs: VOID_LEGS,
+      hands: VOID_GLOVES,
+    },
+    bonus: '+45% accuracy',
+  },
+  {
+    type: 'elite_void_ranged',
+    name: 'Elite Void (Ranged)',
+    combatStyle: 'ranged',
+    pieces: {
+      head: VOID_RANGER_HELM,
+      body: ELITE_VOID_TOP,
+      legs: ELITE_VOID_ROBE,
+      hands: VOID_GLOVES,
+    },
+    bonus: '+10% accuracy, +12.5% damage',
+  },
+  {
+    type: 'elite_void_magic',
+    name: 'Elite Void (Magic)',
+    combatStyle: 'magic',
+    pieces: {
+      head: VOID_MAGE_HELM,
+      body: ELITE_VOID_TOP,
+      legs: ELITE_VOID_ROBE,
+      hands: VOID_GLOVES,
+    },
+    bonus: '+45% accuracy, +2.5% damage',
+  },
+  {
+    type: 'inquisitor',
+    name: "Inquisitor's",
+    combatStyle: 'melee',
+    pieces: {
+      head: INQUISITOR_HELM,
+      body: INQUISITOR_BODY,
+      legs: INQUISITOR_LEGS,
+    },
+    bonus: '+2.5% crush accuracy and damage per piece (with mace)',
+  },
+  {
+    type: 'obsidian',
+    name: 'Obsidian',
+    combatStyle: 'melee',
+    pieces: {
+      head: OBSIDIAN_HELM,
+      body: OBSIDIAN_BODY,
+      legs: OBSIDIAN_LEGS,
+    },
+    bonus: '+10% accuracy and damage with Tzhaar weapons',
+  },
+];
+
+/**
+ * Check if an equipment piece name matches any of the given patterns.
+ * Uses case-insensitive partial matching to handle variants (ornament kits, recolors).
+ *
+ * @param itemName - The item name to check
+ * @param patterns - Array of patterns to match against
+ * @returns True if the item matches any pattern
+ */
+function matchesItemPattern(itemName: string, patterns: string[]): boolean {
+  const normalizedName = itemName.toLowerCase();
+  return patterns.some((pattern) => normalizedName.includes(pattern.toLowerCase()));
+}
+
+/**
+ * Find an equipment piece that matches any of the given name patterns.
+ *
+ * @param patterns - Array of item name patterns to match
+ * @param candidates - Equipment pieces to search through
+ * @returns The first matching equipment piece, or null if none found
+ */
+export function findMatchingPiece(
+  patterns: string[],
+  candidates: EquipmentPiece[],
+): EquipmentPiece | null {
+  return candidates.find((item) => matchesItemPattern(item.name, patterns)) ?? null;
+}
+
+/**
+ * Find all equipment pieces that match any of the given name patterns.
+ *
+ * @param patterns - Array of item name patterns to match
+ * @param candidates - Equipment pieces to search through
+ * @returns Array of matching equipment pieces
+ */
+export function findAllMatchingPieces(
+  patterns: string[],
+  candidates: EquipmentPiece[],
+): EquipmentPiece[] {
+  return candidates.filter((item) => matchesItemPattern(item.name, patterns));
+}
+
+/**
+ * Get the set bonus definition for a given set type.
+ *
+ * @param type - The set bonus type
+ * @returns The set bonus definition, or undefined if not found
+ */
+export function getSetBonusDefinition(type: SetBonusType): SetBonusDefinition | undefined {
+  return SET_BONUS_DEFINITIONS.find((def) => def.type === type);
+}
+
+/**
+ * Get all set bonus definitions that apply to a given combat style.
+ *
+ * @param style - The combat style
+ * @returns Array of set bonus definitions for that style
+ */
+export function getSetBonusesForStyle(style: CombatStyle): SetBonusDefinition[] {
+  return SET_BONUS_DEFINITIONS.filter(
+    (def) => def.combatStyle === style || def.combatStyle === null,
+  );
+}
+
+/**
+ * Check if a set is complete in the given equipment.
+ *
+ * @param setType - The set bonus type to check
+ * @param equipment - The equipment to check
+ * @returns True if all pieces of the set are equipped
+ */
+export function isSetComplete(setType: SetBonusType, equipment: PlayerEquipment): boolean {
+  const definition = getSetBonusDefinition(setType);
+  if (!definition) return false;
+
+  for (const [slot, patterns] of Object.entries(definition.pieces) as [EquipmentSlot, string[]][]) {
+    const equippedItem = equipment[slot];
+    if (!equippedItem || !matchesItemPattern(equippedItem.name, patterns)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Detect if a set bonus is available from the given candidate equipment.
+ *
+ * This function checks:
+ * 1. Whether all required pieces exist in the candidates
+ * 2. Whether the pieces can be equipped (pass constraints if provided)
+ *
+ * @param setType - The set bonus type to detect
+ * @param candidates - Equipment pieces to search for set pieces
+ * @param constraints - Optional constraints to check against
+ * @returns Detection result with availability, pieces found, and missing slots
+ */
+export function detectSetBonus(
+  setType: SetBonusType,
+  candidates: EquipmentPiece[],
+  constraints?: OptimizerConstraints,
+): SetBonusDetectionResult {
+  const definition = getSetBonusDefinition(setType);
+  if (!definition) {
+    return {
+      type: setType,
+      available: false,
+      canEquip: false,
+      pieces: {},
+      missingPieces: [],
+    };
+  }
+
+  const foundPieces: Partial<PlayerEquipment> = {};
+  const missingPieces: EquipmentSlot[] = [];
+  let canEquip = true;
+
+  // Group candidates by slot for faster lookup
+  const candidatesBySlot = groupBySlot(candidates);
+
+  for (const [slot, patterns] of Object.entries(definition.pieces) as [EquipmentSlot, string[]][]) {
+    const slotCandidates = candidatesBySlot[slot];
+
+    // Filter by constraints if provided
+    let filteredCandidates = slotCandidates;
+    if (constraints?.blacklistedItems) {
+      filteredCandidates = filteredCandidates.filter(
+        (item) => !constraints.blacklistedItems!.has(item.id),
+      );
+    }
+
+    // Find a matching piece
+    const matchingPiece = findMatchingPiece(patterns, filteredCandidates);
+
+    if (matchingPiece) {
+      foundPieces[slot] = matchingPiece;
+
+      // Check if player meets requirements
+      if (constraints?.enforceSkillReqs && constraints.playerSkills) {
+        if (!playerMeetsRequirements(constraints.playerSkills, matchingPiece.id)) {
+          canEquip = false;
+        }
+      }
+    } else {
+      missingPieces.push(slot);
+    }
+  }
+
+  return {
+    type: setType,
+    available: missingPieces.length === 0,
+    canEquip: missingPieces.length === 0 && canEquip,
+    pieces: foundPieces,
+    missingPieces,
+  };
+}
+
+/**
+ * Detect all available set bonuses from the given candidate equipment.
+ *
+ * @param candidates - Equipment pieces to search for set pieces
+ * @param combatStyle - Optional combat style to filter sets
+ * @param constraints - Optional constraints to check against
+ * @returns Array of detection results for all sets (or style-specific sets)
+ */
+export function detectAllSetBonuses(
+  candidates: EquipmentPiece[],
+  combatStyle?: CombatStyle,
+  constraints?: OptimizerConstraints,
+): SetBonusDetectionResult[] {
+  const definitions = combatStyle
+    ? getSetBonusesForStyle(combatStyle)
+    : SET_BONUS_DEFINITIONS;
+
+  return definitions.map((def) => detectSetBonus(def.type, candidates, constraints));
+}
+
+/**
+ * Get the set types that are available (all pieces found) from candidates.
+ *
+ * @param candidates - Equipment pieces to search for set pieces
+ * @param combatStyle - Optional combat style to filter sets
+ * @param constraints - Optional constraints to check against
+ * @returns Array of set types that are fully available
+ */
+export function getAvailableSetBonuses(
+  candidates: EquipmentPiece[],
+  combatStyle?: CombatStyle,
+  constraints?: OptimizerConstraints,
+): SetBonusType[] {
+  const results = detectAllSetBonuses(candidates, combatStyle, constraints);
+  return results
+    .filter((result) => result.available && result.canEquip)
+    .map((result) => result.type);
+}
+
+/**
+ * Build a complete loadout using a specific set bonus.
+ *
+ * This function:
+ * 1. Finds the set pieces from candidates
+ * 2. Returns a partial equipment object with the set pieces
+ *
+ * @param setType - The set bonus type to build
+ * @param candidates - Equipment pieces to search for set pieces
+ * @param constraints - Optional constraints to check against
+ * @returns Partial equipment object with set pieces, or null if set unavailable
+ */
+export function buildSetLoadout(
+  setType: SetBonusType,
+  candidates: EquipmentPiece[],
+  constraints?: OptimizerConstraints,
+): Partial<PlayerEquipment> | null {
+  const detection = detectSetBonus(setType, candidates, constraints);
+
+  if (!detection.available || !detection.canEquip) {
+    return null;
+  }
+
+  return detection.pieces;
+}
+
+/**
+ * Check if Obsidian set would be effective with the given weapon.
+ * Obsidian set only provides bonuses when using Tzhaar weapons.
+ *
+ * @param weapon - The weapon to check
+ * @returns True if the weapon is a Tzhaar weapon that benefits from Obsidian set
+ */
+export function isObsidianEffectiveWithWeapon(weapon: EquipmentPiece | null | undefined): boolean {
+  if (!weapon) return false;
+  return matchesItemPattern(weapon.name, TZHAAR_WEAPONS);
+}
+
+/**
+ * Find the best Tzhaar weapon from candidates for use with Obsidian set.
+ *
+ * @param candidates - Weapon candidates to search
+ * @returns The best Tzhaar weapon, or null if none found
+ */
+export function findTzhaarWeapon(candidates: EquipmentPiece[]): EquipmentPiece | null {
+  return findMatchingPiece(TZHAAR_WEAPONS, candidates.filter((c) => c.slot === 'weapon'));
+}
+
+/**
+ * Check if Inquisitor's set would be effective with the player's current attack style.
+ * Inquisitor's only provides bonuses when using crush attack style.
+ *
+ * @param player - The player to check
+ * @returns True if the player is using crush attack style
+ */
+export function isInquisitorEffectiveForPlayer(player: Player): boolean {
+  return player.style?.type === 'crush';
+}
+
+/**
+ * Get the Inquisitor's mace if available, for enhanced set bonus.
+ *
+ * @param candidates - Equipment candidates to search
+ * @returns The Inquisitor's mace, or null if not found
+ */
+export function findInquisitorMace(candidates: EquipmentPiece[]): EquipmentPiece | null {
+  return findMatchingPiece(INQUISITOR_MACE, candidates.filter((c) => c.slot === 'weapon'));
+}
+
 // ============================================================================
 // Cost Calculation
 // ============================================================================
@@ -706,38 +1140,6 @@ export function filterByCombatStyle(
         return false;
     }
   });
-}
-
-/**
- * Get all equipment grouped by slot.
- *
- * @param equipment - Optional array of equipment to group. Defaults to all available equipment.
- * @returns A record mapping each slot to its equipment pieces
- */
-export function groupBySlot(
-  equipment: EquipmentPiece[] = availableEquipment,
-): Record<EquipmentSlot, EquipmentPiece[]> {
-  const result: Record<EquipmentSlot, EquipmentPiece[]> = {
-    head: [],
-    cape: [],
-    neck: [],
-    ammo: [],
-    weapon: [],
-    body: [],
-    shield: [],
-    legs: [],
-    hands: [],
-    feet: [],
-    ring: [],
-  };
-
-  for (const item of equipment) {
-    if (item.slot in result) {
-      result[item.slot].push(item);
-    }
-  }
-
-  return result;
 }
 
 /**
