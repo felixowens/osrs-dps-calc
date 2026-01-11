@@ -1697,7 +1697,7 @@ The slayer task setting is already fully functional through the existing DPS cal
 - `src/tests/lib/Optimizer.test.ts` (added 17 tests for weapon-003)
 - `meta/optimizer-features.json` (marked weapon-003 as passing)
 
-**Commit:** (to be added after commit)
+**Commit:** c0167cfc
 
 **Notes for next agent:**
 - Crossbow bolt selection was already fully functional through the existing ammo handling code
