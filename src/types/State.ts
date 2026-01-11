@@ -52,6 +52,8 @@ export interface OptimizerSettings {
   ownedItems: number[];
   /** Item IDs to exclude from optimization */
   blacklistedItems: number[];
+  /** Whether to filter items by player skill requirements */
+  enforceSkillReqs: boolean;
 }
 
 export interface ChartEntry {

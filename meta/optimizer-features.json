@@ -387,7 +387,7 @@
         "When enabled, only equippable items are considered",
         "Uses current player skills from loadout"
       ],
-      "passes": false,
+      "passes": true,
       "priority": "medium"
     },
     {

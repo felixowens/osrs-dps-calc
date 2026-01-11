@@ -26,7 +26,9 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
   const calc = useCalc();
 
   // Get settings from global store (persists across modal open/close)
-  const { combatStyle, objective, budget } = store.optimizerSettings;
+  const {
+    combatStyle, objective, budget, enforceSkillReqs,
+  } = store.optimizerSettings;
 
   // Callbacks to update settings in the store
   const setCombatStyle = useCallback((style: CombatStyle) => {
@@ -39,6 +41,10 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
 
   const setBudget = useCallback((b: number | null) => {
     store.updateOptimizerSettings({ budget: b });
+  }, [store]);
+
+  const setEnforceSkillReqs = useCallback((enforce: boolean) => {
+    store.updateOptimizerSettings({ enforceSkillReqs: enforce });
   }, [store]);
 
   // Owned items state: Set of item IDs the user owns
@@ -101,6 +107,8 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
             maxBudget: budget ?? undefined,
             ownedItems: ownedItems.size > 0 ? ownedItems : undefined,
             blacklistedItems: blacklistedItems.size > 0 ? blacklistedItems : undefined,
+            enforceSkillReqs: enforceSkillReqs || undefined,
+            playerSkills: enforceSkillReqs ? store.player.skills : undefined,
           },
         },
       };
@@ -113,7 +121,7 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
     } finally {
       setIsLoading(false);
     }
-  }, [calc, store.player, store.monster, combatStyle, objective, budget, ownedItems, blacklistedItems]);
+  }, [calc, store.player, store.monster, combatStyle, objective, budget, ownedItems, blacklistedItems, enforceSkillReqs]);
 
   // Apply optimized loadout to current loadout
   const applyLoadout = useCallback(() => {
@@ -229,6 +237,26 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
               <div className="bg-dark-400 rounded p-3">
                 <BlacklistManager blacklistedItems={blacklistedItems} setBlacklistedItems={setBlacklistedItems} />
               </div>
+
+              <div className="bg-dark-400 rounded p-3">
+                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enforceSkillReqs}
+                    onChange={(e) => setEnforceSkillReqs(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-gray-500 text-blue-600 focus:ring-blue-500 focus:ring-offset-dark-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-200">
+                      Enforce skill requirements
+                    </span>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Only consider items your character can equip based on current skills
+                    </p>
+                  </div>
+                </label>
+              </div>
             </div>
           </details>
         ) : !isLoading && (
@@ -256,6 +284,26 @@ const OptimizerModal: React.FC<OptimizerModalProps> = observer(({ isOpen, setIsO
 
               <div className="bg-dark-400 rounded p-3">
                 <BlacklistManager blacklistedItems={blacklistedItems} setBlacklistedItems={setBlacklistedItems} />
+              </div>
+
+              <div className="bg-dark-400 rounded p-3">
+                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enforceSkillReqs}
+                    onChange={(e) => setEnforceSkillReqs(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-gray-500 text-blue-600 focus:ring-blue-500 focus:ring-offset-dark-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-200">
+                      Enforce skill requirements
+                    </span>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Only consider items your character can equip based on current skills
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
           </>

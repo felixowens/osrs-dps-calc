@@ -1365,7 +1365,7 @@ The slayer task setting is already fully functional through the existing DPS cal
 **Files changed:**
 - `meta/optimizer-features.json` (marked filter-005 as passing)
 
-**Commit:** (pending)
+**Commit:** ec5f8065
 
 **Notes for next agent:**
 - The filter is ready for use in the optimizer when skill requirements enforcement is enabled
@@ -1373,3 +1373,53 @@ The slayer task setting is already fully functional through the existing DPS cal
 - The toggle should pass enforceSkillReqs flag to constraints, which triggers the filter
 
 **Next feature to work on:** ui-008 - User can toggle skill requirement enforcement
+
+---
+
+## 2026-01-11 (ui-008)
+
+**Feature completed:** ui-008 - User can toggle skill requirement enforcement
+
+**What was implemented:**
+- Added `enforceSkillReqs` boolean field to `OptimizerSettings` in `src/types/State.ts`
+- Added default value `false` in `DEFAULT_OPTIMIZER_SETTINGS` in `src/state.tsx`
+- Added checkbox toggle UI to OptimizerModal in both settings views:
+  - Main settings section (before optimization)
+  - Collapsible settings section (after optimization)
+- Updated `optimizeLoadout()` in `src/lib/Optimizer.ts` to filter equipment by skill requirements:
+  - When `constraints.enforceSkillReqs` is true and `constraints.playerSkills` is provided
+  - Uses existing `filterBySkillRequirements()` function
+- Updated `OptimizerModal.tsx` to:
+  - Read `enforceSkillReqs` from global store settings
+  - Pass `enforceSkillReqs` and `playerSkills` to the optimizer constraints
+  - Include callback to update the setting in the store
+- Fixed ESLint import order in `Optimizer.ts`
+
+**Verification:**
+- All 207 Optimizer tests pass
+- ESLint passes with no errors
+- TypeScript type checking passes
+- Setting persists across modal open/close (via global store)
+- Setting is passed to optimizer and filters equipment correctly
+
+**Files changed:**
+- `src/types/State.ts` (added enforceSkillReqs to OptimizerSettings)
+- `src/state.tsx` (added default value)
+- `src/lib/Optimizer.ts` (added skill requirements filtering in optimizeLoadout, fixed imports)
+- `src/app/components/optimizer/OptimizerModal.tsx` (added checkbox UI and constraint passing)
+- `meta/optimizer-features.json` (marked ui-008 as passing)
+
+**Commit:** (pending)
+
+**Notes for next agent:**
+- The skill requirements feature is now fully integrated end-to-end
+- Data flows: UI toggle → global store → worker request → optimizer constraint → filter
+- Player skills are automatically pulled from the current loadout
+- This completes the skill requirements feature chain: data-004 → filter-005 → ui-008
+- Remaining medium-priority features:
+  - ui-009/worker-002: Progress reporting during optimization
+  - opt-006/opt-007: Set bonus detection and evaluation
+  - weapon-001/002/003: Special weapon handling (blowpipe, powered staves, crossbows)
+  - edge cases: edge-001 through edge-004
+
+**Next feature to work on:** ui-009 or worker-002 (progress reporting) or opt-006 (set bonus detection)

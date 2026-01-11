@@ -1,14 +1,16 @@
-import { EquipmentPiece, Player, PlayerEquipment, PlayerSkills } from '@/types/Player';
+import {
+  EquipmentPiece, Player, PlayerEquipment, PlayerSkills,
+} from '@/types/Player';
 import { Monster } from '@/types/Monster';
 import {
   CombatStyle, EquipmentSlot, EQUIPMENT_SLOTS, ItemEvaluation, ItemPrice,
   OptimizationObjective, OptimizerConstraints, OptimizerResult, SkillRequirements, SlotOptimizationResult,
 } from '@/types/Optimizer';
-import equipmentRequirementsData from '../../cdn/json/equipment-requirements.json';
 import {
   AmmoApplicability, ammoApplicability, availableEquipment, calculateEquipmentBonusesFromGear,
 } from '@/lib/Equipment';
 import PlayerVsNPCCalc from '@/lib/PlayerVsNPCCalc';
+import equipmentRequirementsData from '../../cdn/json/equipment-requirements.json';
 
 /**
  * Check if an equipment piece has any melee offensive bonuses.
@@ -1541,6 +1543,11 @@ export function optimizeLoadout(
   let candidatePool = availableEquipment;
   if (combatStyle) {
     candidatePool = filterByCombatStyle(combatStyle, candidatePool);
+  }
+
+  // Pre-filter equipment by skill requirements if enforced
+  if (constraints?.enforceSkillReqs && constraints.playerSkills) {
+    candidatePool = filterBySkillRequirements(constraints.playerSkills, candidatePool);
   }
 
   // Group candidates by slot for faster lookup
