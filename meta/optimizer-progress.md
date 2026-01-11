@@ -1409,7 +1409,7 @@ The slayer task setting is already fully functional through the existing DPS cal
 - `src/app/components/optimizer/OptimizerModal.tsx` (added checkbox UI and constraint passing)
 - `meta/optimizer-features.json` (marked ui-008 as passing)
 
-**Commit:** (pending)
+**Commit:** 1d83c6cd
 
 **Notes for next agent:**
 - The skill requirements feature is now fully integrated end-to-end
